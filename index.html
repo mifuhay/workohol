@@ -1,0 +1,2158 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Электронный дневник профессиональной практики — ВК ЕАГИ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Caveat:wght@400;700&family=Marck+Script&family=Neucha&family=Bad+Script&family=Pangolin&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Размеры одной страницы дневника в развороте (формат A5: половина A4 по ширине) */
+            --page-w: 148.5mm;
+            --page-h: 210mm;
+
+            /* Размеры листа спуска полос (альбомный A4: две страницы A5 рядом) */
+            --sheet-w: 297mm;
+            --sheet-h: 210mm;
+
+            /* Шрифт и масштаб ТОЛЬКО для вводимых пользователем данных (меняются через модалку «Шрифт») */
+            --fill-font: "Times New Roman", Times, Georgia, serif;
+            --fill-scale: 1;
+
+            /* Шрифт статичного печатного текста бланка — всегда должен оставаться Times New Roman */
+            --label-font: "Times New Roman", Times, Georgia, serif;
+
+            /* Геометрия и положение таблицы учёта работ на странице A5 */
+            --work-table-h: 146mm;       /* высота блока таблицы */
+            --work-table-top: 3mm;       /* вертикальный сдвиг таблицы */
+            --work-table-left: -3mm;     /* горизонтальный сдвиг таблицы */
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #e2e8f0;
+            color: #0f172a;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* ---------- Страница дневника (A5) ---------- */
+        .diary-page {
+            width: var(--page-w);
+            height: var(--page-h);
+            background: #ffffff;
+            font-family: var(--label-font);
+            font-size: 10.5pt;
+            line-height: 1.32;
+            color: #000000;
+            box-sizing: border-box;
+            padding: 11mm 12mm 11mm 12mm;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        /* Нечётные страницы — справа в развороте, корешок слева */
+        .diary-page.odd-page  { padding: 11mm 11mm 11mm 15mm; }
+        /* Чётные страницы — слева в развороте, корешок справа */
+        .diary-page.even-page { padding: 11mm 15mm 11mm 11mm; }
+
+        /* ---------- Поля для заполнения ---------- */
+        .blank-input {
+            border: none;
+            border-bottom: 1px solid #000000;
+            border-radius: 0;
+            background: transparent;
+            outline: none;
+            padding: 0 2px;
+            min-width: 0;
+            color: #000000;
+            font-family: var(--fill-font);
+            font-size: calc(1em * var(--fill-scale));
+            line-height: 1.25;
+        }
+        .blank-input:focus { background: rgba(59, 130, 246, 0.12); }
+
+        .lined-textarea {
+            display: block;
+            width: 100%;
+            border: none;
+            outline: none;
+            resize: none;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+            color: #000000;
+            font-family: var(--fill-font);
+            font-size: calc(10pt * var(--fill-scale));
+            line-height: 22px;
+            background-color: transparent;
+            background-attachment: local;
+            background-image: repeating-linear-gradient(to bottom, transparent 0px, transparent 21px, #94a3b8 21px, #94a3b8 22px);
+        }
+        .lined-textarea:focus { background-color: rgba(59, 130, 246, 0.06); }
+
+        /* ---------- Таблица ежедневных работ: 5 сплошных колонок с ограниченной высотой ---------- */
+        .table-wrap {
+            height: var(--work-table-h);
+            width: calc(100% + 2mm);
+            margin-top: var(--work-table-top);
+            margin-left: var(--work-table-left);
+            flex: none;
+            position: relative;
+        }
+
+        /* Внешний контур всей таблицы задаётся единой рамкой на .diary-table,
+           чтобы линии не двоились и не разрывались при border-collapse: separate */
+        .diary-table {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            table-layout: fixed;
+            line-height: 1.15;
+            border: 0.75pt solid #000000; /* толщина внешнего контура таблицы на экране */
+            box-sizing: border-box;
+        }
+
+        /* Ячейки шапки рисуют только внутренние разделители (справа и снизу) */
+        .diary-table th {
+            border: none;
+            border-right: 0.75pt solid #000000;
+            border-bottom: 0.75pt solid #000000;
+            padding: 3px 2px;
+            vertical-align: middle;
+            word-wrap: break-word;
+            font-weight: normal;
+            text-align: center;
+            background: #ffffff;
+            box-sizing: border-box;
+            position: relative; /* нужно для позиционирования ::after */
+        }
+
+        /* У крайней правой ячейки первой строки шапки правая граница уже есть у самой таблицы */
+        .diary-table thead tr:first-child th:last-child {
+            border-right: none;
+        }
+
+        /* Дорисовка вертикальной границы справа от «завершение» (2-я строка шапки),
+           чтобы она ровно стыковалась с ячейкой справа и вертикальной линией колонки ниже */
+        .diary-table thead tr:nth-child(2) th:last-child::after {
+            content: "";
+            position: absolute;
+            top: -1px;
+            right: -0.75pt;
+            bottom: -0.75pt;
+            width: 0.75pt;
+            background: #000000;
+            pointer-events: none;
+        }
+
+        /* Тело таблицы не рисует собственных рамок — сетку колонок задаёт слой .work-columns-overlay */
+        .diary-table td.col-body {
+            border: none;
+            padding: 0;
+            vertical-align: top;
+            position: relative;
+        }
+
+        /* Слой поверх тела таблицы: сплошные вертикальные линии всех 5 колонок на всю высоту */
+        .work-columns-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            pointer-events: none;
+            z-index: 2;
+            box-sizing: border-box;
+        }
+        .work-columns-overlay > div {
+            height: 100%;
+            border-right: 0.75pt solid #000000;
+            box-sizing: border-box;
+        }
+        .work-columns-overlay > div:last-child { border-right: none; }
+
+        /* Записи (на экране — пунктир между днями, при печати — чистое поле) */
+        .work-entries { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; z-index: 1; }
+        .work-entry-row {
+            display: flex;
+            align-items: stretch;
+            width: 100%;
+            border-bottom: 1px dashed #cbd5e1;
+            position: relative;
+        }
+        .work-entry-row:hover { background-color: rgba(59, 130, 246, 0.04); }
+        .work-entry-cell { padding: 3px 3px; box-sizing: border-box; display: flex; align-items: flex-start; }
+        .work-entry-input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            font-family: var(--fill-font);
+            font-size: calc(9.5pt * var(--fill-scale));
+            line-height: 1.22;
+            color: #000000;
+            resize: none;
+            outline: none;
+            padding: 0;
+            margin: 0;
+            display: block;
+            overflow: hidden;
+        }
+        .work-entry-input:focus { background: rgba(59, 130, 246, 0.12); border-radius: 2px; }
+
+        .add-entry-bar {
+            position: absolute;
+            left: 0; right: 0; bottom: 4px;
+            display: flex;
+            justify-content: center;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .add-entry-bar > * { pointer-events: auto; }
+
+        /* ---------- Режим спуска полос ---------- */
+        .booklet-sheet-wrapper { display: flex; flex-direction: column; align-items: center; margin-bottom: 24px; }
+        .booklet-sheet {
+            width: var(--sheet-w);
+            height: var(--sheet-h);
+            background: #ffffff;
+            display: flex;
+            flex-direction: row;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+        .booklet-sheet::after {
+            content: "";
+            position: absolute;
+            top: 0; bottom: 0; left: 50%;
+            border-left: 1px dashed #94a3b8;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .booklet-sheet .diary-page { box-shadow: none; border: none; }
+
+        .stamp-placeholder {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 68px;
+            height: 68px;
+            border: 1.5px dashed #64748b;
+            border-radius: 50%;
+            font-size: 9pt;
+            color: #334155;
+            user-select: none;
+            flex-shrink: 0;
+            position: relative;
+            cursor: pointer;
+            transition: border-color 0.15s, background-color 0.15s;
+        }
+        .stamp-placeholder:hover {
+            border-color: #2563eb;
+            background-color: rgba(37, 99, 235, 0.05);
+        }
+
+        /* Контейнер для вставленной электронной печати или подписи */
+        .ep-overlay-box {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            z-index: 8;
+        }
+        .ep-overlay-box img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+            mix-blend-mode: multiply; /* чтобы белый фон скана печати/подписи не перекрывал строки */
+        }
+        .ep-overlay-controls {
+            position: absolute;
+            top: -18px;
+            right: 0;
+            display: none;
+            align-items: center;
+            gap: 2px;
+            background: #0f172a;
+            color: #ffffff;
+            border-radius: 6px;
+            padding: 1px 4px;
+            font-size: 10px;
+            line-height: 1.2;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            z-index: 20;
+        }
+        .ep-overlay-box:hover .ep-overlay-controls,
+        .ep-overlay-box.active .ep-overlay-controls {
+            display: flex;
+        }
+        .ep-overlay-controls button {
+            padding: 0 3px;
+            cursor: pointer;
+            background: transparent;
+            border: none;
+            color: inherit;
+            font-size: 10px;
+        }
+        .ep-overlay-controls button:hover {
+            color: #93c5fd;
+        }
+
+        /* Зона подписи на строках «Подпись ...»: выделена аналогично «М.П.» пунктирной рамкой на экране и скрывается при печати */
+        .sign-slot-wrap {
+            position: relative;
+            flex: 1;
+            min-width: 72px;
+            display: flex;
+            align-items: flex-end;
+        }
+        .sign-slot-line {
+            border: 1.5px dashed #64748b;
+            border-bottom: 1.5px solid #000000;
+            border-radius: 4px 4px 0 0;
+            background: rgba(100, 116, 139, 0.04);
+            width: 100%;
+            min-height: 20px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+        }
+        .sign-slot-line::after {
+            content: "подпись";
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 7.5pt;
+            color: #475569;
+            line-height: 1;
+            pointer-events: none;
+            user-select: none;
+        }
+        .sign-slot-line:hover {
+            border-color: #2563eb;
+            border-bottom-color: #000000;
+            background: rgba(37, 99, 235, 0.07);
+        }
+        .sign-slot-line:hover::after {
+            color: #1d4ed8;
+        }
+        .sign-slot-wrap.has-signature .sign-slot-line {
+            border: none;
+            border-bottom: 1px solid #000000;
+            border-radius: 0;
+            background: transparent;
+        }
+        .sign-slot-wrap.has-signature .sign-slot-line::after {
+            display: none;
+        }
+        .sign-slot-add-btn {
+            position: absolute;
+            right: 2px;
+            top: -13px;
+            font-size: 8.5px;
+            font-family: 'Inter', sans-serif;
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #93c5fd;
+            border-radius: 4px;
+            padding: 0 4px;
+            line-height: 1.25;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 6;
+        }
+        .sign-slot-wrap:hover .sign-slot-add-btn {
+            opacity: 1;
+        }
+        .col-mid-sign-slot {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 82%;
+            min-height: 26px;
+            border: 1.5px dashed #64748b;
+            border-radius: 6px;
+            background: rgba(100, 116, 139, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 4;
+            transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+        }
+        .col-mid-sign-slot::after {
+            content: "подпись";
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 7.5pt;
+            color: #475569;
+            line-height: 1;
+            user-select: none;
+        }
+        .col-mid-sign-slot:hover {
+            border-color: #2563eb;
+            background: rgba(37, 99, 235, 0.08);
+        }
+        .col-mid-sign-slot:hover::after {
+            color: #1d4ed8;
+        }
+        .col-mid-sign-slot.has-signature {
+            border: none;
+            background: transparent;
+            width: auto;
+            min-height: 0;
+        }
+        .col-mid-sign-slot.has-signature::after {
+            display: none;
+        }
+
+        .viewport-scaler {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            align-items: safe center;
+            width: 100%;
+            overflow-x: auto;
+            padding-bottom: 40px;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 640px) {
+            .edit-mode-container .diary-page { zoom: 0.62; }
+            .booklet-mode-container .booklet-sheet { zoom: 0.32; }
+        }
+        @media (min-width: 641px) and (max-width: 1180px) {
+            .booklet-mode-container .booklet-sheet { zoom: 0.68; }
+        }
+
+        /* ============ ПЕЧАТЬ ============ */
+        @media print {
+            @page { size: A4 landscape; margin: 0 !important; }
+
+            html, body {
+                background: #ffffff !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                height: auto !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .no-print { display: none !important; }
+
+            .viewport-scaler {
+                padding: 0 !important;
+                margin: 0 !important;
+                display: block !important;
+                overflow: visible !important;
+                width: auto !important;
+            }
+            .viewport-scaler > * { margin: 0 !important; }
+
+            .blank-input, .lined-textarea, .work-entry-input { background-color: transparent !important; }
+            .blank-input::placeholder, .work-entry-input::placeholder { color: transparent !important; }
+
+            .work-entry-row { border-bottom: none !important; background-color: transparent !important; }
+
+            .lined-textarea {
+                background-image: repeating-linear-gradient(to bottom, transparent 0px, transparent 21px, #000000 21px, #000000 22px) !important;
+            }
+
+            .sheet-label { display: none !important; }
+
+            .booklet-sheet-wrapper {
+                margin: 0 !important;
+                padding: 0 !important;
+                display: block !important;
+                height: 209.8mm;
+                overflow: hidden;
+                page-break-after: always;
+                break-after: page;
+            }
+            .booklet-sheet-wrapper:last-child { page-break-after: auto; break-after: auto; }
+
+            .booklet-sheet {
+                width: 297mm !important;
+                height: 209.8mm !important;
+                box-shadow: none !important;
+                zoom: 1 !important;
+                transform: none !important;
+                margin: 0 !important;
+            }
+            .booklet-sheet::after { display: none !important; }
+
+            .diary-page {
+                width: 148.5mm !important;
+                height: 209.8mm !important;
+                box-shadow: none !important;
+                zoom: 1 !important;
+                transform: none !important;
+            }
+            .stamp-placeholder { border: none !important; color: #000000 !important; }
+            .stamp-placeholder.has-stamp { color: transparent !important; }
+            .sign-slot-line {
+                border: none !important;
+                border-bottom: 1px solid #000000 !important;
+                border-radius: 0 !important;
+                background: transparent !important;
+            }
+            .sign-slot-line::after { display: none !important; }
+            .ep-overlay-controls, .sign-slot-add-btn, .col-mid-sign-slot:not(.has-signature) { display: none !important; }
+
+            /* Печать таблицы: дублируем те же правила с толщиной линий для печати (1pt),
+               чтобы границы не пропадали на стыках ячеек и страниц */
+            .table-wrap {
+                overflow: visible !important;
+                transform: translateZ(0);
+            }
+            .diary-table {
+                border-collapse: separate !important;
+                border-spacing: 0 !important;
+                border: 1pt solid #000000 !important;
+                box-shadow: inset 0 0 0 0.5pt #000000;
+            }
+            .diary-table th {
+                border: none !important;
+                border-right: 1pt solid #000000 !important;
+                border-bottom: 1pt solid #000000 !important;
+                background-color: #ffffff !important;
+                -webkit-box-decoration-break: clone;
+                box-decoration-break: clone;
+                position: relative;
+            }
+            .diary-table thead tr:first-child th:last-child {
+                border-right: none !important;
+            }
+            /* При изменении толщины границ при печати синхронизируйте top/right/bottom/width с толщиной линии */
+            .diary-table thead tr:nth-child(2) th:last-child::after {
+                content: "";
+                position: absolute;
+                top: -1pt;
+                right: -1pt;
+                bottom: -1pt;
+                width: 1pt;
+                background: #000000 !important;
+                pointer-events: none;
+            }
+            .diary-table td.col-body {
+                border: none !important;
+                background-color: #ffffff !important;
+            }
+            .work-columns-overlay {
+                border: none !important;
+            }
+            .work-columns-overlay > div {
+                border-right: 1pt solid #000000 !important;
+            }
+            .work-columns-overlay > div:last-child {
+                border-right: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
+    <header class="no-print sticky top-0 z-40 bg-slate-900 text-white shadow-lg border-b border-slate-700">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 p-2 rounded-lg shadow-inner">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-bold text-sm sm:text-base tracking-tight">Дневник практики ВК ЕАГИ</h1>
+                        <span id="save-status" class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            Сохранено
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400">Всего страниц: <strong id="total-pages-badge" class="text-white">40</strong> (формат A5 / брошюра A4)</p>
+                </div>
+            </div>
+
+            <div class="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
+                <button id="btn-mode-edit" onclick="setMode('edit')" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all bg-blue-600 text-white shadow">
+                    1. Заполнение
+                </button>
+                <button id="btn-mode-booklet" onclick="setMode('booklet')" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-300 hover:text-white">
+                    2. Печать брошюрой (A4)
+                </button>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <button onclick="addWorkPage()" title="Добавить страницу таблицы" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded-lg text-xs font-medium flex items-center gap-1 transition">
+                    <span class="text-emerald-400 font-bold">+</span> Страница
+                </button>
+                <button onclick="removeWorkPage()" title="Удалить последнюю страницу таблицы" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded-lg text-xs font-medium flex items-center gap-1 transition">
+                    <span class="text-rose-400 font-bold">−</span> Страница
+                </button>
+
+                <button onclick="openFontModal()" title="Шрифт заполняемых полей" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded-lg text-xs font-medium transition">
+                    <span class="font-bold">Aa</span> Шрифт
+                </button>
+                <button onclick="openAssetsModal()" title="Загрузить и управлять электронными печатями и подписями" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded-lg text-xs font-medium transition">
+                    ✎ Печати и подписи
+                </button>
+
+                <div class="h-5 w-px bg-slate-700 mx-0.5 hidden sm:block"></div>
+
+                <button onclick="exportJSON()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded-lg text-xs font-medium transition" title="Скачать файл данных для переноса на другое устройство">
+                    Экспорт (.json)
+                </button>
+                <label class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded-lg text-xs font-medium cursor-pointer transition" title="Загрузить сохранённый файл .json">
+                    Импорт (.json)
+                    <input type="file" id="import-file" accept=".json" class="hidden" onchange="importJSON(event)">
+                </label>
+                <button onclick="openResetModal()" class="px-2.5 py-1.5 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/60 rounded-lg text-xs font-medium transition">
+                    Сброс
+                </button>
+
+                <button onclick="openPrintGuide()" class="ml-1 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-xs sm:text-sm shadow-md flex items-center gap-1.5 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                    </svg>
+                    Печать / PDF
+                </button>
+            </div>
+        </div>
+
+        <div id="quick-nav-bar" class="bg-slate-800/90 border-t border-slate-700/80 px-3 py-1.5">
+            <div class="max-w-7xl mx-auto flex items-center justify-between gap-2 overflow-x-auto text-xs">
+                <div class="flex items-center gap-1.5 whitespace-nowrap">
+                    <span class="text-slate-400 mr-1">Переход:</span>
+                    <button onclick="scrollToPage(1)" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-blue-600 text-slate-200 transition">Титул (1)</button>
+                    <button onclick="scrollToPage(2)" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-blue-600 text-slate-200 transition">Направление №1 (2)</button>
+                    <button onclick="scrollToPage(3)" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-blue-600 text-slate-200 transition">Направление №2 (3)</button>
+                    <button onclick="scrollToPage(4)" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-blue-600 text-slate-200 transition">Прибытие/выбытие (4)</button>
+                    <button onclick="scrollToPage(5)" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-blue-600 text-slate-200 transition">Таблица работ (5–<span id="nav-last-work-page">38</span>)</button>
+                    <button onclick="scrollToPage('penultimate')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-blue-600 text-slate-200 transition">Заключение (<span id="nav-penultimate-page">39</span>)</button>
+                    <button onclick="scrollToPage('last')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-blue-600 text-slate-200 transition">Характеристика (<span id="nav-last-page">40</span>)</button>
+                </div>
+                <button onclick="syncStudentInfo()" class="whitespace-nowrap px-2.5 py-0.5 rounded bg-indigo-600/80 hover:bg-indigo-500 text-white font-medium transition" title="Скопировать ФИО, предприятие, приказ и даты в остальные бланки">
+                    Автозаполнить ФИО и даты во всех бланках
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- БАННЕР РЕЖИМА БРОШЮРЫ -->
+    <div id="booklet-banner" class="no-print hidden bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-amber-900 text-xs sm:text-sm">
+        <div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            <div>
+                <strong>Режим спуска полос:</strong> страницы A5 разложены попарно на листы A4 (альбомная ориентация) для двусторонней печати и сшивания посередине.
+                <span id="padding-notice" class="hidden font-semibold text-amber-800"></span>
+            </div>
+            <button onclick="triggerBrowserPrint()" class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-xs transition">
+                Запустить печать сейчас
+            </button>
+        </div>
+    </div>
+
+    <!-- РАБОЧАЯ ОБЛАСТЬ -->
+    <main id="workspace" class="viewport-scaler pt-6 px-2 sm:px-6 flex-1"></main>
+
+    <!-- МОДАЛКА: ПЕЧАТЬ -->
+    <div id="print-modal" class="no-print fixed inset-0 z-50 hidden bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 max-h-full overflow-y-auto">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Подготовка к двусторонней печати брошюрой</h3>
+                    <p class="text-xs text-slate-500">Чтобы дневник сложился как книжка без перевёрнутых страниц</p>
+                </div>
+                <button onclick="closePrintGuide()" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+            </div>
+
+            <div class="space-y-3 text-sm text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div class="flex gap-3">
+                    <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">1</span>
+                    <div>
+                        <p class="font-semibold text-slate-900">Автоматический спуск полос (A5 → A4)</p>
+                        <p class="text-xs text-slate-600 mt-0.5">Лист 1 (лицо): <strong>[последняя стр. | стр. 1]</strong>, лист 1 (оборот): <strong>[стр. 2 | предпоследняя]</strong> и так далее. Если число страниц не кратно 4, пустые страницы добавятся автоматически перед заключением.</p>
+                    </div>
+                </div>
+                <div class="flex gap-3">
+                    <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">2</span>
+                    <div>
+                        <p class="font-semibold text-slate-900">Настройки в окне печати браузера</p>
+                        <ul class="text-xs text-slate-600 mt-1 space-y-1 list-disc list-inside">
+                            <li><strong>Ориентация:</strong> альбомная (Landscape)</li>
+                            <li><strong>Размер бумаги:</strong> A4</li>
+                            <li><strong>Поля:</strong> нет (None), масштаб 100%</li>
+                            <li><strong>Фоновая графика:</strong> включить</li>
+                            <li><strong>Двусторонняя печать:</strong> включить → <span class="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-semibold">переворот по короткому краю (Flip on short edge)</span></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="flex gap-3">
+                    <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">3</span>
+                    <div>
+                        <p class="font-semibold text-slate-900">Сборка и сшивание</p>
+                        <p class="text-xs text-slate-600 mt-0.5">Сложите стопку листов A4 пополам и скрепите по линии сгиба степлером.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-5 flex flex-wrap justify-end gap-2.5">
+                <button onclick="closePrintGuide()" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium">Отмена</button>
+                <button onclick="confirmAndPrint()" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-md">
+                    Сформировать брошюру и открыть печать
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА: СБРОС -->
+    <div id="reset-modal" class="no-print fixed inset-0 z-50 hidden bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <h3 class="text-lg font-bold text-slate-900 mb-2">Очистить все данные дневника?</h3>
+            <p class="text-sm text-slate-600 mb-5">Все записи будут удалены из памяти браузера, а структура вернётся к стандартным 40 страницам. Рекомендуем предварительно скачать резервную копию (.json).</p>
+            <div class="flex justify-end gap-2.5">
+                <button onclick="closeResetModal()" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium">Отмена</button>
+                <button onclick="resetAllData()" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Да, очистить всё</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА: ШРИФТ -->
+    <div id="font-modal" class="no-print fixed inset-0 z-50 hidden bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 max-h-full overflow-y-auto">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Шрифт заполнения</h3>
+                    <p class="text-xs text-slate-500">Применяется ко всем полям, которые вы заполняете</p>
+                </div>
+                <button onclick="closeFontModal()" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+            </div>
+
+            <div class="space-y-4 text-sm text-slate-700">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1" for="font-select">Шрифт</label>
+                    <select id="font-select" onchange="onFontSelect(this.value)" class="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-sm bg-white"></select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1" for="font-size">
+                        Размер: <span id="font-size-val">100%</span>
+                    </label>
+                    <input id="font-size" type="range" min="0.8" max="1.4" step="0.05" value="1" oninput="onFontSize(this.value)" class="w-full">
+                </div>
+
+                <p class="text-xs text-slate-500">Настройка шрифта и размера применяется только к вводимым данным; печатный текст бланка всегда остаётся в <strong>Times New Roman</strong>.</p>
+
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-1">Предпросмотр</div>
+                    <div style="font-family: var(--fill-font); font-size: calc(12pt * var(--fill-scale)); line-height: 1.3;">
+                        Иванов Иван Иванович. 12.03 — Изучение правил охраны труда, 0123456789
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-200 pt-3">
+                    <p class="text-xs font-semibold text-slate-600 mb-1.5">Свой шрифт</p>
+                    <label class="inline-block px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium cursor-pointer">
+                        Загрузить файл (.ttf, .otf, .woff, .woff2)
+                        <input type="file" id="font-file" accept=".ttf,.otf,.woff,.woff2" class="hidden" onchange="handleFontUpload(event)">
+                    </label>
+                    <p class="text-[11px] text-slate-500 mt-1.5">Шрифт должен поддерживать кириллицу. Файл до 2,5 МБ; хранится только в этом браузере.</p>
+                    <div id="custom-font-list" class="mt-2 space-y-1"></div>
+                </div>
+            </div>
+
+            <div class="mt-5 flex justify-end">
+                <button onclick="closeFontModal()" class="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-700 text-white text-sm font-semibold">Готово</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА: ПЕЧАТИ И ПОДПИСИ -->
+    <div id="assets-modal" class="no-print fixed inset-0 z-50 hidden bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-full overflow-y-auto">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Электронные печати и подписи</h3>
+                    <p class="text-xs text-slate-500">Загрузите изображения (PNG с прозрачным фоном или скан) и вставляйте в нужные места бланка</p>
+                </div>
+                <button onclick="closeAssetsModal()" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+            </div>
+
+            <div id="assets-target-banner" class="hidden mb-4 p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 flex items-center justify-between gap-2">
+                <span>Выбрано место: <strong id="assets-target-label"></strong>. Нажмите «Вставить» на нужной печати или подписи.</span>
+                <button type="button" onclick="clearAssetTarget()" class="text-blue-700 underline font-medium">Сбросить</button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+                <label class="p-3 rounded-xl border border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 cursor-pointer text-center transition">
+                    <div class="text-xs font-semibold text-slate-800">+ Загрузить печать</div>
+                    <div class="text-[11px] text-slate-500 mt-0.5">PNG, JPG, WEBP (до 1,5 МБ)</div>
+                    <input type="file" id="upload-stamp-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" onchange="handleAssetUpload(event, 'stamp')">
+                </label>
+                <label class="p-3 rounded-xl border border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 cursor-pointer text-center transition">
+                    <div class="text-xs font-semibold text-slate-800">+ Загрузить подпись</div>
+                    <div class="text-[11px] text-slate-500 mt-0.5">PNG, JPG, WEBP (до 1,5 МБ)</div>
+                    <input type="file" id="upload-sign-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" onchange="handleAssetUpload(event, 'signature')">
+                </label>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Сохранённые печати</h4>
+                    <div id="stamps-library-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5"></div>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Сохранённые подписи</h4>
+                    <div id="signatures-library-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5"></div>
+                </div>
+            </div>
+
+            <p class="text-[11px] text-slate-500 mt-4">Совет: можно нажать прямо на кружок <strong>М.П.</strong> или на строку подписи в бланке, чтобы быстро выбрать или сдвинуть изображение.</p>
+
+            <div class="mt-5 flex justify-end">
+                <button onclick="closeAssetsModal()" class="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-700 text-white text-sm font-semibold">Готово</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- УВЕДОМЛЕНИЕ -->
+    <div id="toast" class="no-print fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-sm font-medium border border-slate-700 max-w-sm"></div>
+
+    <script>
+        const STORAGE_KEY = 'eagi_practice_diary_v2';
+        const FONT_KEY = 'eagi_practice_diary_font_v1';
+        const DEFAULT_ENTRIES_PER_PAGE = 4;
+        const DEFAULT_WORK_PAGES_COUNT = 34; // 6 служебных + 34 таблицы = 40 страниц (кратно 4)
+        const FIXED_PAGES = 6;               // титул, 2 направления, прибытие/выбытие, заключение, характеристика
+
+        let currentMode = 'edit'; // 'edit' | 'booklet'
+
+        // ============================================================================
+        // СОСТОЯНИЕ ДАННЫХ
+        // ============================================================================
+        function createEmptyEntry() {
+            return { num: '', work: '', start: '', end: '', sign: '' };
+        }
+        function createEmptyWorkPageEntries() {
+            return Array.from({ length: DEFAULT_ENTRIES_PER_PAGE }, () => createEmptyEntry());
+        }
+        function createDirection() {
+            return {
+                basis: '', basis2: '', basis3: '',
+                day: '', month: '', year: '26',
+                fio: '', fio2: '',
+                enterprise: '', enterprise2: '', enterprise3: '',
+                startDay: '', startMonth: '', startYear: '26',
+                endDay: '', endMonth: '', endYear: '26',
+                directorName: ''
+            };
+        }
+
+        function createDefaultState() {
+            return {
+                cover: {
+                    practiceType: 'профессиональной', fio: '', specialty: '', course: '', group: '',
+                    enterprise: '', collegeSupervisor: '', orgSupervisor: '', year: '26'
+                },
+                dir1: createDirection(),
+                dir2: createDirection(),
+                arrival: {
+                    fio: '', fio2: '',
+                    practiceName: '', practiceName2: '', practiceName3: '', practiceName4: '', practiceName5: '',
+                    arrivedFrom: '', arrivedFrom2: '', arrDay: '', arrMonth: '', arrYear: '26',
+                    departedTo: '', departedTo2: '', depDay: '', depMonth: '', depYear: '26'
+                },
+                workPages: Array.from({ length: DEFAULT_WORK_PAGES_COUNT }, () => createEmptyWorkPageEntries()),
+                summary: {
+                    sec1Text: '',
+                    sec1SupervisorNote: '',
+                    studentSignDay: '', studentSignMonth: '', studentSignYear: '26',
+                    supSignDay: '', supSignMonth: '', supSignYear: '26',
+                    sec2Text: '', sec3Text: '',
+                    orgSupSignDay: '', orgSupSignMonth: '', orgSupSignYear: '26'
+                },
+                characteristic: { text: '', signDay: '', signMonth: '', signYear: '26' },
+                // Библиотека загруженных изображений печатей и подписей: [{ id, kind: 'stamp'|'signature', name, data }]
+                assetsLibrary: [],
+                // Размещения на бланке по ключу слота: { [slotId]: { assetId, scale, dx, dy } }
+                placements: {}
+            };
+        }
+
+        function normalizeState(raw) {
+            const def = createDefaultState();
+            if (!raw || typeof raw !== 'object') return def;
+            const merge = (key) => ({ ...def[key], ...((raw[key] && typeof raw[key] === 'object') ? raw[key] : {}) });
+            const cleanAssets = Array.isArray(raw.assetsLibrary)
+                ? raw.assetsLibrary.filter(a => a && typeof a.id === 'string' && typeof a.data === 'string' && a.data.startsWith('data:image/'))
+                : [];
+            const cleanPlacements = (raw.placements && typeof raw.placements === 'object')
+                ? Object.fromEntries(
+                    Object.entries(raw.placements).filter(([, p]) => p && typeof p.assetId === 'string')
+                        .map(([k, p]) => [k, {
+                            assetId: p.assetId,
+                            scale: Math.min(2.5, Math.max(0.4, Number(p.scale) || 1)),
+                            dx: Number(p.dx) || 0,
+                            dy: Number(p.dy) || 0
+                        }])
+                )
+                : {};
+            return {
+                cover: merge('cover'),
+                dir1: merge('dir1'),
+                dir2: merge('dir2'),
+                arrival: merge('arrival'),
+                summary: merge('summary'),
+                characteristic: merge('characteristic'),
+                workPages: Array.isArray(raw.workPages) && raw.workPages.length > 0
+                    ? raw.workPages.map(page => Array.isArray(page) && page.length > 0
+                        ? page.map(e => ({ ...createEmptyEntry(), ...(e && typeof e === 'object' ? e : {}) }))
+                        : createEmptyWorkPageEntries())
+                    : def.workPages,
+                assetsLibrary: cleanAssets,
+                placements: cleanPlacements
+            };
+        }
+
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return createDefaultState();
+                return normalizeState(JSON.parse(raw));
+            } catch (e) {
+                console.error('Ошибка чтения данных из localStorage:', e);
+                return createDefaultState();
+            }
+        }
+
+        let diaryState = loadState();
+
+        let saveTimeout = null;
+        function saveState() {
+            const statusEl = document.getElementById('save-status');
+            if (statusEl) {
+                statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Сохранение...';
+            }
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(diaryState));
+                    if (statusEl) {
+                        statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Сохранено';
+                    }
+                } catch (e) {
+                    console.error('Ошибка сохранения:', e);
+                    showToast('Ошибка сохранения в память браузера');
+                }
+            }, 250);
+        }
+
+        function esc(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function updateField(path, value) {
+            const parts = path.split('.');
+            let target = diaryState;
+            for (let i = 0; i < parts.length - 1; i++) target = target[parts[i]];
+            target[parts[parts.length - 1]] = value;
+            saveState();
+        }
+
+        function updateWorkCell(pageIdx, rowIdx, colKey, value) {
+            if (diaryState.workPages[pageIdx] && diaryState.workPages[pageIdx][rowIdx]) {
+                diaryState.workPages[pageIdx][rowIdx][colKey] = value;
+                saveState();
+            }
+        }
+
+        // ============================================================================
+        // ТАБЛИЦА РАБОТ: ВЫСОТА ТЕКСТА, ПЕРЕПОЛНЕНИЕ, ДОБАВЛЕНИЕ/УДАЛЕНИЕ
+        // ============================================================================
+        let overflowTimer = null;
+        function autoResizeEntry(el) {
+            if (!el) return;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+            clearTimeout(overflowTimer);
+            overflowTimer = setTimeout(checkTableOverflow, 60);
+        }
+
+        function autoResizeAll() {
+            document.querySelectorAll('textarea.work-entry-input').forEach(el => {
+                el.style.height = 'auto';
+                el.style.height = el.scrollHeight + 'px';
+            });
+            checkTableOverflow();
+        }
+
+        function checkTableOverflow() {
+            document.querySelectorAll('.work-entries').forEach(box => {
+                const warn = box.parentElement.querySelector('.overflow-warn');
+                if (!warn) return;
+                let used = 0;
+                box.querySelectorAll('.work-entry-row').forEach(r => { used += r.offsetHeight; });
+                warn.classList.toggle('hidden', used <= box.clientHeight + 1);
+            });
+        }
+
+        function addWorkEntry(pageIdx) {
+            if (!diaryState.workPages[pageIdx]) return;
+            diaryState.workPages[pageIdx].push(createEmptyEntry());
+            saveState();
+            renderWorkspace();
+        }
+
+        function removeWorkEntry(pageIdx, rowIdx) {
+            if (!diaryState.workPages[pageIdx]) return;
+            if (diaryState.workPages[pageIdx].length <= 1) {
+                diaryState.workPages[pageIdx][0] = createEmptyEntry();
+            } else {
+                diaryState.workPages[pageIdx].splice(rowIdx, 1);
+            }
+            saveState();
+            renderWorkspace();
+        }
+
+        function getTotalLogicalPages() {
+            return FIXED_PAGES + diaryState.workPages.length;
+        }
+
+        function addWorkPage() {
+            diaryState.workPages.push(createEmptyWorkPageEntries());
+            saveState();
+            renderWorkspace();
+            showToast(`Добавлена страница таблицы. Всего страниц: ${getTotalLogicalPages()}`);
+            if (currentMode === 'edit') {
+                const targetPageNum = 4 + diaryState.workPages.length;
+                setTimeout(() => scrollToPage(targetPageNum), 100);
+            }
+        }
+
+        function removeWorkPage() {
+            if (diaryState.workPages.length <= 1) {
+                showToast('Должна остаться хотя бы одна страница таблицы');
+                return;
+            }
+            const last = diaryState.workPages[diaryState.workPages.length - 1];
+            const hasData = last.some(e => e.num || e.work || e.start || e.end || e.sign);
+            if (hasData && !window.confirm('На последней странице таблицы есть записи. Удалить её вместе с записями?')) return;
+            diaryState.workPages.pop();
+            saveState();
+            renderWorkspace();
+            showToast(`Удалена последняя страница таблицы. Всего страниц: ${getTotalLogicalPages()}`);
+        }
+
+        function syncStudentInfo() {
+            const s = diaryState;
+            const first = (a, b) => a || b;
+            const fio = s.cover.fio || s.dir1.fio || s.dir2.fio || s.arrival.fio;
+            const enterprise = s.cover.enterprise || s.dir1.enterprise || s.dir2.enterprise || s.arrival.practiceName;
+
+            if (fio) { s.cover.fio = s.dir1.fio = s.dir2.fio = s.arrival.fio = fio; }
+            if (enterprise) { s.cover.enterprise = s.dir1.enterprise = s.dir2.enterprise = s.arrival.practiceName = enterprise; }
+
+            ['basis', 'day', 'month', 'year', 'directorName'].forEach(k => {
+                const v = first(s.dir1[k], s.dir2[k]);
+                if (v) { s.dir1[k] = v; s.dir2[k] = v; }
+            });
+            ['startDay', 'startMonth', 'startYear'].forEach((k, i) => {
+                const v = first(s.dir1[k], s.dir2[k]);
+                const arrKey = ['arrDay', 'arrMonth', 'arrYear'][i];
+                if (v) { s.dir1[k] = v; s.dir2[k] = v; s.arrival[arrKey] = v; }
+            });
+            ['endDay', 'endMonth', 'endYear'].forEach((k, i) => {
+                const v = first(s.dir1[k], s.dir2[k]);
+                const depKey = ['depDay', 'depMonth', 'depYear'][i];
+                if (v) { s.dir1[k] = v; s.dir2[k] = v; s.arrival[depKey] = v; }
+            });
+
+            saveState();
+            renderWorkspace();
+            showToast('ФИО, предприятие, приказ и сроки практики синхронизированы во всех разделах');
+        }
+
+        // ============================================================================
+        // ГЕНЕРАТОРЫ СТРАНИЦ (A5)
+        // ============================================================================
+        const parity = (n) => (n % 2 === 0 ? 'even-page' : 'odd-page');
+
+        function dateBlock(base, keys, obj, w) {
+            w = Object.assign({ d: 'w-7', m: 'w-24', y: 'w-6' }, w || {});
+            const inp = (k, cls) =>
+                `<input type="text" class="blank-input ${cls} text-center" value="${esc(obj[k])}" oninput="updateField('${base}.${k}', this.value)">`;
+            return `<span class="whitespace-nowrap">«</span>${inp(keys[0], w.d)}<span>»</span>${inp(keys[1], w.m)}<span class="whitespace-nowrap">20</span>${inp(keys[2], w.y)}<span>г.</span>`;
+        }
+
+        function lineField(path, value, placeholder) {
+            return `<input type="text" class="blank-input w-full" value="${esc(value)}" oninput="updateField('${path}', this.value)" placeholder="${esc(placeholder || '')}">`;
+        }
+
+        function pageFooter(pageNum) {
+            return `<div class="text-center text-[8.5pt] text-gray-600">— ${pageNum} —</div>`;
+        }
+
+        // ТИТУЛ
+        function renderCoverPage(pageNum) {
+            const c = diaryState.cover;
+            return `
+            <div class="diary-page ${parity(pageNum)}" data-page-num="${pageNum}">
+                <div class="text-center pt-1">
+                    <p class="text-[9.5pt] font-bold uppercase tracking-wide">ҚАЗАҚСТАН РЕСПУБЛИКАСЫ</p>
+                    <p class="text-[9.5pt] font-bold uppercase tracking-wide">РЕСПУБЛИКА КАЗАХСТАН</p>
+                    <div class="my-2 border-t border-b border-black py-1.5">
+                        <p class="text-[9.5pt] font-bold uppercase leading-snug">«ЕУРАЗИЯ ГУМАНИТАРЛЫҚ ИНСТИТУТЫНЫҢ ЖОҒАРЫ КОЛЛЕДЖІ» МЕКЕМЕСІ</p>
+                        <p class="text-[9.5pt] font-bold uppercase leading-snug mt-0.5">УЧРЕЖДЕНИЕ «ВЫСШИЙ КОЛЛЕДЖ ЕВРАЗИЙСКОГО ГУМАНИТАРНОГО ИНСТИТУТА»</p>
+                    </div>
+                </div>
+
+                <!-- Блок названия дневника: слово «профессиональной» фиксированное (не редактируется),
+                     оформлено единообразно с остальными строками блока и без подчёркивания -->
+                <div class="text-center my-auto py-2">
+                    <h2 class="text-[17pt] font-bold uppercase tracking-widest mb-1">ДНЕВНИК</h2>
+                    <p class="text-[11.5pt] font-bold uppercase">прохождения</p>
+                    <p class="text-[11.5pt] font-bold uppercase mt-0.5">профессиональной</p>
+                    <p class="text-[11.5pt] font-bold uppercase mt-0.5">практики</p>
+                </div>
+
+                <div class="space-y-2 text-[10pt] mb-2">
+                    <div>
+                        <div class="flex items-end gap-1">
+                            <span class="whitespace-nowrap">Обучающегося:</span>
+                            ${lineField('cover.fio', c.fio, 'Фамилия, имя, отчество')}
+                        </div>
+                        <div class="text-[7.5pt] text-center text-gray-700 leading-none mt-0.5">(фамилия, имя, отчество (при его наличии))</div>
+                    </div>
+
+                    <div class="flex items-end gap-1">
+                        <span class="whitespace-nowrap">Специальность:</span>
+                        ${lineField('cover.specialty', c.specialty, 'Шифр и наименование специальности')}
+                    </div>
+
+                    <div class="flex items-end gap-4">
+                        <div class="flex items-end gap-1 w-1/2">
+                            <span class="whitespace-nowrap">Курс:</span>
+                            <input type="text" class="blank-input w-full text-center" value="${esc(c.course)}" oninput="updateField('cover.course', this.value)">
+                        </div>
+                        <div class="flex items-end gap-1 w-1/2">
+                            <span class="whitespace-nowrap">Группа:</span>
+                            <input type="text" class="blank-input w-full text-center" value="${esc(c.group)}" oninput="updateField('cover.group', this.value)">
+                        </div>
+                    </div>
+
+                    <div class="flex items-end gap-1">
+                        <span class="whitespace-nowrap">Место практики:</span>
+                        ${lineField('cover.enterprise', c.enterprise, 'Наименование предприятия / организации')}
+                    </div>
+
+                    <div class="flex items-end gap-1">
+                        <span class="whitespace-nowrap">Руководитель от колледжа:</span>
+                        ${lineField('cover.collegeSupervisor', c.collegeSupervisor)}
+                    </div>
+
+                    <div class="flex items-end gap-1">
+                        <span class="whitespace-nowrap">Руководитель от организации:</span>
+                        ${lineField('cover.orgSupervisor', c.orgSupervisor)}
+                    </div>
+                </div>
+
+                <div class="text-center pb-1">
+                    <div class="inline-flex items-end gap-0.5 text-[10.5pt]">
+                        <span>г. Астана, 20</span>
+                        <input type="text" class="blank-input w-7 text-center" value="${esc(c.year)}" oninput="updateField('cover.year', this.value)">
+                        <span>г.</span>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // НАПРАВЛЕНИЕ №1 / №2
+        function renderDirectionPage(key, pageNum, topNote) {
+            const d = diaryState[key];
+            const dirLined = 'line-height: 22px; background-image: repeating-linear-gradient(to bottom, transparent 0px, transparent 21px, #000000 21px, #000000 22px);';
+            const basisCombined = d.basisBlock !== undefined
+                ? d.basisBlock
+                : [d.basis, d.basis2, d.basis3].filter(Boolean).join(' ');
+            const fioCombined = d.fioBlock !== undefined
+                ? d.fioBlock
+                : [d.fio, d.fio2].filter(Boolean).join(' ');
+            const enterpriseCombined = d.enterpriseBlock !== undefined
+                ? d.enterpriseBlock
+                : [d.enterprise, d.enterprise2, d.enterprise3].filter(Boolean).join(' ');
+
+            const dateRow = (prefix) => {
+                const inp = (k, cls) =>
+                    `<input type="text" class="blank-input ${cls} text-center" value="${esc(d[k])}" oninput="updateField('${key}.${k}', this.value)">`;
+                return `
+                    <span class="whitespace-nowrap">«</span>${inp(prefix + 'Day', 'w-8')}<span>»</span>` +
+                    `${inp(prefix + 'Month', 'w-24')} ` +
+                    `<span class="whitespace-nowrap">20</span>${inp(prefix + 'Year', 'w-7')}<span>г.</span>`;
+            };
+
+            return `
+            <div class="diary-page ${parity(pageNum)}" data-page-num="${pageNum}">
+                <div>
+                    <h3 class="text-[13pt] font-bold text-center mb-2.5">Направление</h3>
+                    <div class="text-[10pt] mb-2.5" style="min-height: 1.3em;">${topNote ? esc(topNote) : ''}</div>
+
+                    <div class="text-[10pt] leading-tight">
+                        <!-- Основание: единый разлинованный блок на 3 строчки с автопереносом -->
+                        <div>
+                            <textarea class="lined-textarea" style="${dirLined} height: 66px;" rows="3"
+                                oninput="updateField('${key}.basisBlock', this.value); updateField('${key}.basis', this.value)"
+                                placeholder="Приказ № ...">${esc(basisCombined)}</textarea>
+                        </div>
+                        <div class="text-[8pt] text-center leading-none mt-1">(основание)</div>
+
+                        <!-- Пробел + от « » 20 г. -->
+                        <div class="flex items-end gap-1 mt-4">
+                            <span>от</span>
+                            ${dateRow('')}
+                        </div>
+
+                        <!-- Пробел + обучающийся ... единый двухстрочный блок с автопереносом -->
+                        <div class="mt-3.5">
+                            <div class="relative">
+                                <span class="absolute left-0 top-0 whitespace-nowrap pointer-events-none" style="line-height: 22px;">обучающийся</span>
+                                <textarea class="lined-textarea" style="${dirLined} height: 44px; text-indent: 22mm;" rows="2"
+                                    oninput="updateField('${key}.fioBlock', this.value); updateField('${key}.fio', this.value)">${esc(fioCombined)}</textarea>
+                            </div>
+                            <div class="text-[8.5pt] text-center leading-none mt-1">фамилия, имя, отчество (при его наличии)</div>
+                        </div>
+
+                        <!-- Пробел + направляется для прохождения профессиональной практики + единый блок на 3 строчки -->
+                        <div class="mt-4">
+                            <p class="leading-snug mb-1.5">направляется для прохождения<br>профессиональной практики</p>
+                            <textarea class="lined-textarea" style="${dirLined} height: 66px;" rows="3"
+                                oninput="updateField('${key}.enterpriseBlock', this.value); updateField('${key}.enterprise', this.value)">${esc(enterpriseCombined)}</textarea>
+                            <div class="text-[8pt] text-center leading-none mt-1">(наименование предприятия)</div>
+                        </div>
+
+                        <!-- Пробел + сроки практики -->
+                        <div class="mt-4 space-y-2.5">
+                            <div class="flex items-end gap-2">
+                                <span class="whitespace-nowrap">Срок начала практики</span>
+                                <div class="flex items-end gap-0.5">${dateRow('start')}</div>
+                            </div>
+                            <div class="flex items-end gap-2">
+                                <span class="whitespace-nowrap">Срок завершения практики</span>
+                                <div class="flex items-end gap-0.5">${dateRow('end')}</div>
+                            </div>
+                        </div>
+
+                        <!-- Пробел + Руководитель учебного заведения + подпись + М.П. -->
+                        <div class="mt-4 flex items-end justify-between gap-2">
+                            <div class="flex-1">
+                                <div class="flex items-end gap-1.5">
+                                    <span class="whitespace-nowrap">Руководитель учебного заведения</span>
+                                    ${lineField(key + '.directorName', d.directorName)}
+                                    ${renderSignatureLineSlot(key + "_director_sign", "Направление — подпись руководителя учебного заведения", "w-24 flex-none ml-1")}
+                                </div>
+                                <div class="flex justify-end mt-1">
+                                    <div class="w-32 text-[8pt] text-center leading-none">(подпись)</div>
+                                </div>
+                            </div>
+                            ${renderStampSlot(key + "_stamp", "Направление — печать")}
+                        </div>
+                    </div>
+                </div>
+
+                <div>${pageFooter(pageNum)}</div>
+            </div>`;
+        }
+
+        // ОТМЕТКА О ПРИБЫТИИ И ВЫБЫТИИ
+        function renderArrivalPage(pageNum) {
+            const a = diaryState.arrival;
+            const unifiedLined = 'line-height: 22px; background-image: repeating-linear-gradient(to bottom, transparent 0px, transparent 21px, #000000 21px, #000000 22px);';
+            const fioCombined = a.fioBlock !== undefined
+                ? a.fioBlock
+                : [a.fio, a.fio2].filter(Boolean).join(' ');
+            const practiceCombined = a.practiceBlock !== undefined
+                ? a.practiceBlock
+                : [a.practiceName, a.practiceName2, a.practiceName3, a.practiceName4, a.practiceName5].filter(Boolean).join(' ');
+
+            const column = (title, f1, v1, f2, v2, keys, who) => {
+                const combinedKey = who === 'arr' ? 'arrivedFromBlock' : 'departedToBlock';
+                const combinedVal = a[combinedKey] !== undefined
+                    ? a[combinedKey]
+                    : [v1, v2].filter(Boolean).join(' ');
+                return `
+                <div class="flex flex-col justify-between min-h-[60mm] ${who === 'arr' ? 'pr-2.5' : 'pl-1.5'}">
+                    <div>
+                        <p class="font-bold mb-1.5">${title}</p>
+                        <textarea class="lined-textarea mb-3" style="${unifiedLined} height: 44px;" rows="2"
+                            oninput="updateField('arrival.${combinedKey}', this.value); updateField('arrival.${f1}', this.value)"
+                            placeholder="${who === 'arr' ? 'Колледж / ВК ЕАГИ' : 'Предприятие'}">${esc(combinedVal)}</textarea>
+                        <div class="flex items-end gap-0.5 text-[9.5pt]">
+                            ${dateBlock('arrival', keys, a, { d: 'w-6', m: 'w-14', y: 'w-5' })}
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="flex items-end">${renderSignatureLineSlot("arrival_" + who + "_sign", (who === "arr" ? "Прибыл из" : "Выбыл в") + " — подпись", "h-6")}</div>
+                        <div class="text-[8pt] text-center leading-none mt-1">(подпись, печать)</div>
+                        <div class="mt-2 flex justify-end">${renderStampSlot("arrival_" + who + "_stamp", (who === "arr" ? "Прибыл из" : "Выбыл в") + " — печать")}</div>
+                    </div>
+                </div>`;
+            };
+
+            return `
+            <div class="diary-page ${parity(pageNum)}" data-page-num="${pageNum}">
+                <div>
+                    <h3 class="text-[12pt] font-bold text-center mb-3">Отметка о прибытии и выбытии</h3>
+
+                    <div class="space-y-2.5 text-[10.5pt]">
+                        <div>
+                            <div class="relative">
+                                <span class="absolute left-0 top-0 whitespace-nowrap pointer-events-none" style="line-height: 22px;">Обучающийся</span>
+                                <textarea class="lined-textarea" style="${unifiedLined} height: 44px; text-indent: 24mm;" rows="2"
+                                    oninput="updateField('arrival.fioBlock', this.value); updateField('arrival.fio', this.value)">${esc(fioCombined)}</textarea>
+                            </div>
+                            <div class="text-[8pt] text-center leading-none mt-1">(фамилия, имя, отчество (при его наличии))</div>
+                        </div>
+
+                        <div class="pt-3">
+                            <p class="mb-1">для прохождения профессиональной практики</p>
+                            <textarea class="lined-textarea mt-1" style="${unifiedLined} height: 110px;" rows="5"
+                                oninput="updateField('arrival.practiceBlock', this.value); updateField('arrival.practiceName', this.value)">${esc(practiceCombined)}</textarea>
+                            <div class="text-[8pt] text-center leading-none mt-1">(наименование профессиональной практики)</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 mt-14 pt-1 text-[10pt]">
+                        ${column('Прибыл из', 'arrivedFrom', a.arrivedFrom, 'arrivedFrom2', a.arrivedFrom2, ['arrDay', 'arrMonth', 'arrYear'], 'arr')}
+                        ${column('Выбыл в', 'departedTo', a.departedTo, 'departedTo2', a.departedTo2, ['depDay', 'depMonth', 'depYear'], 'dep')}
+                    </div>
+                </div>
+                ${pageFooter(pageNum)}
+            </div>`;
+        }
+
+        // ТАБЛИЦА ЕЖЕДНЕВНЫХ РАБОТ — 5 колонок
+        function renderWorkTablePage(workPageIdx, pageNum) {
+            const entries = diaryState.workPages[workPageIdx] || [];
+
+            const rows = entries.map((entry, r) => {
+                const ph = (txt) => (r === 0 ? txt : '');
+                const area = (col, cls, placeholder) =>
+                    `<textarea class="work-entry-input ${cls}" rows="1" oninput="updateWorkCell(${workPageIdx}, ${r}, '${col}', this.value); autoResizeEntry(this)" placeholder="${placeholder}">${esc(entry[col])}</textarea>`;
+                return `
+                <div class="work-entry-row group">
+                    <div class="work-entry-cell justify-center" style="width: 7%;">${area('num', 'text-center', ph('1'))}</div>
+                    <div class="work-entry-cell" style="width: 47%;">${area('work', '', ph('Описание выполненных работ...'))}</div>
+                    <div class="work-entry-cell justify-center" style="width: 13%;">${area('start', 'text-center', ph('ДД.ММ'))}</div>
+                    <div class="work-entry-cell justify-center" style="width: 13%;">${area('end', 'text-center', ph('ДД.ММ'))}</div>
+                    <div class="work-entry-cell justify-center relative" style="width: 20%;">
+                        ${area('sign', 'text-center', '')}
+                        <button type="button" onclick="removeWorkEntry(${workPageIdx}, ${r})" title="Удалить эту запись"
+                            class="no-print opacity-0 group-hover:opacity-100 focus:opacity-100 absolute right-0.5 top-0.5 w-4 h-4 rounded bg-rose-100 hover:bg-rose-500 text-rose-700 hover:text-white text-[10px] leading-none flex items-center justify-center transition"
+                            style="z-index:6;">×</button>
+                    </div>
+                </div>`;
+            }).join('');
+
+            return `
+            <div class="diary-page ${parity(pageNum)}" data-page-num="${pageNum}">
+                <div class="table-wrap">
+                    <table class="diary-table">
+                        <colgroup>
+                            <col style="width: 7%;">
+                            <col style="width: 47%;">
+                            <col style="width: 13%;">
+                            <col style="width: 13%;">
+                            <col style="width: 20%;">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th rowspan="2" style="font-size: 8pt;">№<br>п/п</th>
+                                <th rowspan="2" style="font-size: 8pt; padding: 3px 4px;">Наименование выполненных (изученных) работ в соответствии с программой профессиональной практики за каждый день</th>
+                                <th colspan="2" style="font-size: 7.5pt;">Сроки выполнения отдельных тем, работ профессиональной практики</th>
+                                <th rowspan="2" style="font-size: 7.5pt;">Подпись руководителя профессиональной практики с производства</th>
+                            </tr>
+                            <tr>
+                                <th style="font-size: 7.5pt; padding: 1px;">начало</th>
+                                <th style="font-size: 7.5pt; padding: 1px;">завершение</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="height: 100%;">
+                                <td colspan="5" class="col-body">
+                                    <div class="work-columns-overlay">
+                                        <div style="width: 7%;"></div>
+                                        <div style="width: 47%;"></div>
+                                        <div style="width: 13%;"></div>
+                                        <div style="width: 13%;"></div>
+                                        <div style="width: 20%; position: relative; pointer-events: auto;">
+                                            ${renderTableSignSlot(`work_${workPageIdx}_col_sign`, `Таблица работ (стр. ${pageNum}) — подпись руководителя с производства`)}
+                                        </div>
+                                    </div>
+                                    <div class="work-entries">${rows}</div>
+                                    <div class="add-entry-bar no-print">
+                                        <span class="overflow-warn hidden mr-2 px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-300 text-[10px] font-sans font-medium">Текст не помещается — сократите или перенесите на новую страницу</span>
+                                        <button type="button" onclick="addWorkEntry(${workPageIdx})" class="px-2.5 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-sans font-medium transition">+ Добавить запись / день</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-center text-[8.5pt] text-gray-600 mt-1">— ${pageNum} —</div>
+            </div>`;
+        }
+
+        // ПРЕДПОСЛЕДНЯЯ СТРАНИЦА (пункты 1–3)
+        function renderSummaryPage(pageNum) {
+            const s = diaryState.summary;
+            const compactLined = 'line-height: 18px; background-image: repeating-linear-gradient(to bottom, transparent 0px, transparent 17px, #94a3b8 17px, #94a3b8 18px);';
+
+            return `
+            <div class="diary-page ${parity(pageNum)}" data-page-num="${pageNum}" id="page-penultimate">
+                <div class="space-y-1.5 text-[9.5pt]">
+                    <div>
+                        <p class="leading-snug mb-1">
+                            <strong>1.</strong> Описание изученных конструкций, оборудования, технологических процессов, механизации, автоматизации производства и передовых методов труда и т. д.:
+                        </p>
+                        <textarea class="lined-textarea" style="${compactLined}" rows="4" oninput="updateField('summary.sec1Text', this.value)">${esc(s.sec1Text)}</textarea>
+
+                        <div class="mt-1 space-y-1 text-[9pt]">
+                            <div class="flex items-end gap-1">
+                                <span class="whitespace-nowrap">Подпись обучающегося</span>
+                                ${renderSignatureLineSlot("summary_student_sign", "Заключение — подпись обучающегося", "mx-1")}
+                                ${dateBlock('summary', ['studentSignDay', 'studentSignMonth', 'studentSignYear'], s, { d: 'w-6', m: 'w-14', y: 'w-5' })}
+                            </div>
+
+                            <div class="pt-1">
+                                <textarea class="lined-textarea" style="${compactLined}" rows="2" oninput="updateField('summary.sec1SupervisorNote', this.value)">${esc(s.sec1SupervisorNote || '')}</textarea>
+                            </div>
+
+                            <div class="flex items-end gap-1 pt-0.5">
+                                <span class="text-[8pt] leading-tight">(непосредственный руководитель профессиональной практики)</span>
+                                ${renderSignatureLineSlot("summary_sup_sign", "Заключение — подпись непосредственного руководителя", "mx-1")}
+                                ${dateBlock('summary', ['supSignDay', 'supSignMonth', 'supSignYear'], s, { d: 'w-6', m: 'w-14', y: 'w-5' })}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <p class="leading-snug mb-1"><strong>2.</strong> Поощрения и взыскания обучающегося практиканта:</p>
+                        <textarea class="lined-textarea" style="${compactLined}" rows="5" oninput="updateField('summary.sec2Text', this.value)">${esc(s.sec2Text)}</textarea>
+                    </div>
+
+                    <div class="pt-2.5">
+                        <p class="leading-snug mb-1"><strong>3.</strong> Заключение руководителя профессиональной практики (от организации, предприятия, учреждения):</p>
+                        <textarea class="lined-textarea" style="${compactLined}" rows="7" oninput="updateField('summary.sec3Text', this.value)">${esc(s.sec3Text)}</textarea>
+
+                        <div class="mt-1.5 flex items-end gap-1 text-[9pt]">
+                            <span class="text-[8pt] leading-tight" style="max-width: 50%;">Подпись руководителя профессиональной практики (от организации, предприятия, учреждения)</span>
+                            ${renderSignatureLineSlot("summary_org_sup_sign", "Заключение — подпись руководителя от организации", "mx-1")}
+                            ${dateBlock('summary', ['orgSupSignDay', 'orgSupSignMonth', 'orgSupSignYear'], s, { d: 'w-5', m: 'w-14', y: 'w-5' })}
+                        </div>
+                    </div>
+                </div>
+
+                ${pageFooter(pageNum)}
+            </div>`;
+        }
+
+        // ПОСЛЕДНЯЯ СТРАНИЦА — ХАРАКТЕРИСТИКА
+        function renderCharacteristicPage(pageNum) {
+            const ch = diaryState.characteristic;
+            return `
+            <div class="diary-page ${parity(pageNum)}" data-page-num="${pageNum}" id="page-last">
+                <div class="flex-1 flex flex-col min-h-0">
+                    <div class="text-center mb-2">
+                        <h3 class="text-[11.5pt] font-bold uppercase leading-tight">ХАРАКТЕРИСТИКА</h3>
+                        <h4 class="text-[11pt] font-bold uppercase leading-tight">РАБОТЫ СТУДЕНТА</h4>
+                        <p class="text-[9pt] leading-snug mt-0.5">(с указанием теоретической подготовки, отношения и качества выполненных работ, трудовой дисциплины)</p>
+                    </div>
+
+                    <div class="flex-1 mt-1 min-h-0">
+                        <textarea class="lined-textarea" style="height: 100%;" oninput="updateField('characteristic.text', this.value)">${esc(ch.text)}</textarea>
+                    </div>
+
+                    <div class="mt-3 pt-1 flex items-end justify-between gap-2 text-[9.5pt]">
+                        <div class="flex-1">
+                            <div class="flex items-end gap-1">
+                                <span class="whitespace-nowrap">Подпись руководителя</span>
+                                ${renderSignatureLineSlot("characteristic_sign", "Характеристика — подпись руководителя")}
+                            </div>
+                            <div class="mt-2 flex items-end gap-1">
+                                ${dateBlock('characteristic', ['signDay', 'signMonth', 'signYear'], ch, { d: 'w-7', m: 'w-24', y: 'w-6' })}
+                            </div>
+                        </div>
+                        ${renderStampSlot("characteristic_stamp", "Характеристика — печать")}
+                    </div>
+                </div>
+
+                <div class="mt-1">${pageFooter(pageNum)}</div>
+            </div>`;
+        }
+
+        // Пустая страница-вставка для кратности 4 (без номера)
+        function renderBlankFillerPage(pageNum) {
+            return `
+            <div class="diary-page ${parity(pageNum)}" data-page-num="${pageNum}">
+                <div class="flex-1 flex items-center justify-center text-gray-300 text-xs select-none no-print text-center px-6">
+                    (Пустая страница для выравнивания брошюры до кратности 4)
+                </div>
+            </div>`;
+        }
+
+        // Список страниц по порядку
+        function buildPageList(forBooklet) {
+            const list = [{ type: 'cover' }, { type: 'dir1' }, { type: 'dir2' }, { type: 'arrival' }];
+            diaryState.workPages.forEach((_, i) => list.push({ type: 'work', idx: i }));
+            let blanks = 0;
+            if (forBooklet) {
+                const total = list.length + 2; // + заключение + характеристика
+                blanks = (4 - (total % 4)) % 4;
+                for (let b = 0; b < blanks; b++) list.push({ type: 'blank' });
+            }
+            list.push({ type: 'summary' }, { type: 'characteristic' });
+            return { list, blanks };
+        }
+
+        function renderPage(item, pos) {
+            switch (item.type) {
+                case 'cover': return renderCoverPage(pos);
+                case 'dir1': return renderDirectionPage('dir1', pos, 'Остаётся на производстве');
+                case 'dir2': return renderDirectionPage('dir2', pos, '');
+                case 'arrival': return renderArrivalPage(pos);
+                case 'work': return renderWorkTablePage(item.idx, pos);
+                case 'summary': return renderSummaryPage(pos);
+                case 'characteristic': return renderCharacteristicPage(pos);
+                default: return renderBlankFillerPage(pos);
+            }
+        }
+
+        // ============================================================================
+        // РЕНДЕР: ЗАПОЛНЕНИЕ / СПУСК ПОЛОС
+        // ============================================================================
+        function renderWorkspace() {
+            const workspace = document.getElementById('workspace');
+            const totalLogical = getTotalLogicalPages();
+
+            document.getElementById('total-pages-badge').textContent = totalLogical;
+            document.getElementById('nav-last-work-page').textContent = totalLogical - 2;
+            document.getElementById('nav-penultimate-page').textContent = totalLogical - 1;
+            document.getElementById('nav-last-page').textContent = totalLogical;
+
+            if (currentMode === 'edit') {
+                workspace.className = 'viewport-scaler edit-mode-container pt-6 px-2 sm:px-6 flex-1 space-y-6';
+                document.getElementById('quick-nav-bar').classList.remove('hidden');
+                document.getElementById('booklet-banner').classList.add('hidden');
+
+                const { list } = buildPageList(false);
+                workspace.innerHTML = list.map((item, i) => `
+                    <div class="flex flex-col items-center">
+                        <div class="no-print text-xs font-medium text-slate-500 mb-1.5">Страница ${i + 1} из ${list.length}</div>
+                        ${renderPage(item, i + 1)}
+                    </div>`).join('');
+            } else {
+                workspace.className = 'viewport-scaler booklet-mode-container pt-6 px-2 sm:px-6 flex-1';
+                document.getElementById('quick-nav-bar').classList.add('hidden');
+                document.getElementById('booklet-banner').classList.remove('hidden');
+
+                const { list, blanks } = buildPageList(true);
+                const N = list.length;
+                const pages = list.map((item, i) => renderPage(item, i + 1));
+
+                const notice = document.getElementById('padding-notice');
+                if (blanks > 0) {
+                    notice.classList.remove('hidden');
+                    notice.textContent = ` Добавлено пустых страниц: ${blanks}, итого ${N} стр.`;
+                } else {
+                    notice.classList.add('hidden');
+                }
+
+                let sheetsHtml = '';
+                for (let s = 0; s < N / 2; s++) {
+                    const sheetNum = Math.floor(s / 2) + 1;
+                    const isFront = (s % 2 === 0);
+                    const leftIdx = isFront ? N - 1 - s : s;
+                    const rightIdx = isFront ? s : N - 1 - s;
+                    const title = `Лист A4 №${sheetNum} — ${isFront ? 'ЛИЦЕВАЯ' : 'ОБОРОТНАЯ'} сторона (стр. ${leftIdx + 1} | стр. ${rightIdx + 1})`;
+                    sheetsHtml += `
+                    <div class="booklet-sheet-wrapper">
+                        <div class="sheet-label no-print text-xs font-semibold text-slate-600 mb-1.5 bg-white px-3 py-1 rounded-full shadow-sm border border-slate-300">${title}</div>
+                        <div class="booklet-sheet">${pages[leftIdx]}${pages[rightIdx]}</div>
+                    </div>`;
+                }
+                workspace.innerHTML = sheetsHtml;
+            }
+
+            autoResizeAll();
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            const on = 'px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all bg-blue-600 text-white shadow';
+            const off = 'px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all text-slate-300 hover:text-white';
+            document.getElementById('btn-mode-edit').className = mode === 'edit' ? on : off;
+            document.getElementById('btn-mode-booklet').className = mode === 'booklet' ? on : off;
+            renderWorkspace();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function scrollToPage(target) {
+            if (currentMode !== 'edit') setMode('edit');
+            setTimeout(() => {
+                let el = null;
+                if (target === 'penultimate') el = document.getElementById('page-penultimate');
+                else if (target === 'last') el = document.getElementById('page-last');
+                else el = document.querySelector(`.diary-page[data-page-num="${target}"]`);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 50);
+        }
+
+        // ============================================================================
+        // ЭКСПОРТ / ИМПОРТ / СБРОС
+        // ============================================================================
+        function exportJSON() {
+            try {
+                const blob = new Blob([JSON.stringify(diaryState, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                const studentName = (diaryState.cover.fio || 'student').trim().replace(/\s+/g, '_');
+                link.href = url;
+                link.download = `Дневник_практики_${studentName}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                showToast('Файл резервной копии (.json) скачан');
+            } catch (e) {
+                console.error(e);
+                showToast('Ошибка при экспорте файла');
+            }
+        }
+
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (!imported || typeof imported !== 'object' || !imported.cover) {
+                        throw new Error('Некорректный формат файла дневника');
+                    }
+                    diaryState = normalizeState(imported);
+                    saveState();
+                    renderWorkspace();
+                    showToast('Данные дневника успешно загружены');
+                } catch (err) {
+                    console.error(err);
+                    showToast('Ошибка: выбран неверный файл .json');
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        function openResetModal() { document.getElementById('reset-modal').classList.remove('hidden'); }
+        function closeResetModal() { document.getElementById('reset-modal').classList.add('hidden'); }
+        function resetAllData() {
+            diaryState = createDefaultState();
+            saveState();
+            renderWorkspace();
+            closeResetModal();
+            showToast('Все поля очищены. Восстановлены 40 стандартных страниц.');
+        }
+
+        // ============================================================================
+        // ШРИФТЫ
+        // ============================================================================
+        const DEFAULT_FONT = 'Times New Roman';
+        const BUILTIN_FONTS = [
+            { name: 'Times New Roman', css: '"Times New Roman", Times, Georgia, serif' },
+            { name: 'Arial', css: 'Arial, Helvetica, sans-serif' },
+            { name: 'Georgia', css: 'Georgia, "Times New Roman", serif' },
+            { name: 'Courier New', css: '"Courier New", Courier, monospace' },
+            { name: 'Caveat', css: '"Caveat", cursive', hand: true },
+            { name: 'Marck Script', css: '"Marck Script", cursive', hand: true },
+            { name: 'Neucha', css: '"Neucha", cursive', hand: true },
+            { name: 'Bad Script', css: '"Bad Script", cursive', hand: true },
+            { name: 'Pangolin', css: '"Pangolin", cursive', hand: true }
+        ];
+        const loadedFaces = {};
+
+        function loadFontSettings() {
+            const def = { family: DEFAULT_FONT, size: 1, custom: [] };
+            try {
+                const raw = localStorage.getItem(FONT_KEY);
+                if (!raw) return def;
+                const p = JSON.parse(raw);
+                const size = Math.min(1.4, Math.max(0.8, Number(p.size) || 1));
+                return {
+                    family: typeof p.family === 'string' ? p.family : def.family,
+                    size,
+                    custom: Array.isArray(p.custom)
+                        ? p.custom.filter(f => f && typeof f.name === 'string' && typeof f.data === 'string' && f.data.startsWith('data:'))
+                        : []
+                };
+            } catch (e) {
+                return def;
+            }
+        }
+
+        let fontSettings = loadFontSettings();
+
+        function persistFontSettings() {
+            try {
+                localStorage.setItem(FONT_KEY, JSON.stringify(fontSettings));
+                return true;
+            } catch (e) {
+                console.error('Не удалось сохранить настройки шрифта:', e);
+                return false;
+            }
+        }
+
+        function fontCss(name) {
+            if (fontSettings.custom.some(f => f.name === name)) return `"${name}", "Times New Roman", serif`;
+            const b = BUILTIN_FONTS.find(f => f.name === name);
+            return (b || BUILTIN_FONTS[0]).css;
+        }
+
+        function applyFontSettings() {
+            const root = document.documentElement;
+            const css = fontCss(fontSettings.family);
+            root.style.setProperty('--fill-font', css);
+            root.style.setProperty('--fill-scale', String(fontSettings.size));
+            root.style.setProperty('--label-font', BUILTIN_FONTS[0].css);
+            setTimeout(autoResizeAll, 50);
+        }
+
+        async function registerCustomFont(font) {
+            const face = new FontFace(font.name, `url(${font.data})`);
+            await face.load();
+            document.fonts.add(face);
+            loadedFaces[font.name] = face;
+        }
+
+        async function registerAllCustomFonts() {
+            for (const f of fontSettings.custom) {
+                try { await registerCustomFont(f); } catch (e) { console.error('Шрифт не загружен:', f.name, e); }
+            }
+            applyFontSettings();
+        }
+
+        function buildFontModal() {
+            const sel = document.getElementById('font-select');
+            const opt = (n) => `<option value="${esc(n)}">${esc(n)}</option>`;
+            let html = `<optgroup label="Печатные">${BUILTIN_FONTS.filter(f => !f.hand).map(f => opt(f.name)).join('')}</optgroup>`;
+            html += `<optgroup label="Рукописные (Google Fonts)">${BUILTIN_FONTS.filter(f => f.hand).map(f => opt(f.name)).join('')}</optgroup>`;
+            if (fontSettings.custom.length) {
+                html += `<optgroup label="Мои шрифты">${fontSettings.custom.map(f => opt(f.name)).join('')}</optgroup>`;
+            }
+            sel.innerHTML = html;
+            sel.value = fontSettings.family;
+
+            document.getElementById('font-size').value = fontSettings.size;
+            document.getElementById('font-size-val').textContent = Math.round(fontSettings.size * 100) + '%';
+
+            const list = document.getElementById('custom-font-list');
+            list.innerHTML = fontSettings.custom.map(f => `
+                <div class="flex items-center justify-between gap-2 text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                    <span class="truncate" style="font-family: '${esc(f.name)}', serif;">${esc(f.name)}</span>
+                    <button type="button" onclick="removeCustomFont('${esc(f.name)}')" class="text-rose-600 hover:text-rose-800 font-medium">Удалить</button>
+                </div>`).join('');
+        }
+
+        function openFontModal() { buildFontModal(); document.getElementById('font-modal').classList.remove('hidden'); }
+        function closeFontModal() { document.getElementById('font-modal').classList.add('hidden'); }
+
+        function onFontSelect(name) {
+            fontSettings.family = name;
+            persistFontSettings();
+            applyFontSettings();
+        }
+        function onFontSize(v) {
+            fontSettings.size = Math.min(1.4, Math.max(0.8, Number(v) || 1));
+            document.getElementById('font-size-val').textContent = Math.round(fontSettings.size * 100) + '%';
+            persistFontSettings();
+            applyFontSettings();
+        }
+
+        function handleFontUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (file.size > 2.5 * 1024 * 1024) {
+                showToast('Файл шрифта больше 2,5 МБ — выберите файл поменьше');
+                event.target.value = '';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = async () => {
+                const name = (file.name.replace(/\.[^.]+$/, '').replace(/[^\p{L}\p{N} _-]/gu, '').trim() || 'Мой шрифт').slice(0, 40);
+                const font = { name, data: reader.result };
+                try {
+                    await registerCustomFont(font);
+                    fontSettings.custom = fontSettings.custom.filter(f => f.name !== name);
+                    fontSettings.custom.push(font);
+                    fontSettings.family = name;
+                    const saved = persistFontSettings();
+                    applyFontSettings();
+                    buildFontModal();
+                    showToast(saved ? `Шрифт «${name}» добавлен и выбран` : `Шрифт «${name}» работает сейчас, но не сохранился (мало места в браузере)`);
+                } catch (e) {
+                    console.error(e);
+                    showToast('Не удалось прочитать шрифт. Нужен файл .ttf, .otf, .woff или .woff2');
+                }
+                event.target.value = '';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeCustomFont(name) {
+            fontSettings.custom = fontSettings.custom.filter(f => f.name !== name);
+            if (loadedFaces[name]) { try { document.fonts.delete(loadedFaces[name]); } catch (e) {} delete loadedFaces[name]; }
+            if (fontSettings.family === name) fontSettings.family = DEFAULT_FONT;
+            persistFontSettings();
+            applyFontSettings();
+            buildFontModal();
+        }
+
+
+        // ============================================================================
+        // ЭЛЕКТРОННЫЕ ПЕЧАТИ И ПОДПИСИ
+        // ============================================================================
+        let pendingAssetTarget = null; // { slotId, kind, label }
+
+        function findAssetById(assetId) {
+            return (diaryState.assetsLibrary || []).find(a => a.id === assetId) || null;
+        }
+
+        function renderStampSlot(slotId, label) {
+            const p = diaryState.placements && diaryState.placements[slotId];
+            const asset = p ? findAssetById(p.assetId) : null;
+            if (!asset) {
+                return `
+                <div class="stamp-placeholder" onclick="openAssetsModal('${slotId}', 'stamp', '${esc(label)}')" title="Нажмите, чтобы вставить печать (${esc(label)})">
+                    М.П.
+                </div>`;
+            }
+            const scale = p.scale || 1;
+            const dx = p.dx || 0;
+            const dy = p.dy || 0;
+            const sizePx = Math.round(74 * scale);
+            return `
+            <div class="stamp-placeholder has-stamp" style="border-color: transparent; background: transparent;" onclick="openAssetsModal('${slotId}', 'stamp', '${esc(label)}')" title="Нажмите, чтобы сменить печать">
+                М.П.
+                <div class="ep-overlay-box"
+                     style="position: absolute; left: 50%; top: 50%; width: ${sizePx}px; height: ${sizePx}px; transform: translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px));"
+                     onclick="event.stopPropagation(); this.classList.toggle('active');"
+                     onmousedown="startOverlayDrag(event, '${slotId}')">
+                    <img src="${asset.data}" alt="${esc(asset.name)}">
+                    <div class="ep-overlay-controls no-print" onclick="event.stopPropagation();">
+                        <button type="button" title="Уменьшить" onclick="adjustPlacement('${slotId}', -0.1, 0, 0)">−</button>
+                        <button type="button" title="Увеличить" onclick="adjustPlacement('${slotId}', 0.1, 0, 0)">+</button>
+                        <button type="button" title="Сбросить позицию" onclick="resetPlacement('${slotId}')">↺</button>
+                        <button type="button" title="Убрать печать" onclick="removePlacement('${slotId}')">✕</button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function renderSignatureLineSlot(slotId, label, extraClasses = '') {
+            const p = diaryState.placements && diaryState.placements[slotId];
+            const asset = p ? findAssetById(p.assetId) : null;
+            if (!asset) {
+                return `
+                <span class="sign-slot-wrap ${extraClasses}">
+                    <span class="sign-slot-line" onclick="openAssetsModal('${slotId}', 'signature', '${esc(label)}')" title="Нажмите, чтобы вставить подпись (${esc(label)})"></span>
+                    <button type="button" class="sign-slot-add-btn no-print" onclick="event.stopPropagation(); openAssetsModal('${slotId}', 'signature', '${esc(label)}')">+ подпись</button>
+                </span>`;
+            }
+            const scale = p.scale || 1;
+            const dx = p.dx || 0;
+            const dy = p.dy || 0;
+            const wPx = Math.round(105 * scale);
+            const hPx = Math.round(36 * scale);
+            return `
+            <span class="sign-slot-wrap has-signature ${extraClasses}">
+                <span class="sign-slot-line" onclick="openAssetsModal('${slotId}', 'signature', '${esc(label)}')" title="Нажмите, чтобы сменить подпись"></span>
+                <div class="ep-overlay-box"
+                     style="position: absolute; left: 50%; bottom: 1px; width: ${wPx}px; height: ${hPx}px; transform: translate(calc(-50% + ${dx}px), ${dy}px);"
+                     onclick="event.stopPropagation(); this.classList.toggle('active');"
+                     onmousedown="startOverlayDrag(event, '${slotId}')">
+                    <img src="${asset.data}" alt="${esc(asset.name)}">
+                    <div class="ep-overlay-controls no-print" onclick="event.stopPropagation();">
+                        <button type="button" title="Уменьшить" onclick="adjustPlacement('${slotId}', -0.1, 0, 0)">−</button>
+                        <button type="button" title="Увеличить" onclick="adjustPlacement('${slotId}', 0.1, 0, 0)">+</button>
+                        <button type="button" title="Сбросить позицию" onclick="resetPlacement('${slotId}')">↺</button>
+                        <button type="button" title="Убрать подпись" onclick="removePlacement('${slotId}')">✕</button>
+                    </div>
+                </div>
+            </span>`;
+        }
+
+        function renderTableSignSlot(slotId, label) {
+            const p = diaryState.placements && diaryState.placements[slotId];
+            const asset = p ? findAssetById(p.assetId) : null;
+            if (!asset) {
+                return `
+                <div class="col-mid-sign-slot no-print"
+                     onclick="event.stopPropagation(); openAssetsModal('${slotId}', 'signature', '${esc(label)}')"
+                     title="Вставить подпись посередине столбца (${esc(label)})"></div>`;
+            }
+            const scale = p.scale || 1;
+            const dx = p.dx || 0;
+            const dy = p.dy || 0;
+            const wPx = Math.round(92 * scale);
+            const hPx = Math.round(32 * scale);
+            return `
+            <div class="col-mid-sign-slot has-signature"
+                 onclick="event.stopPropagation(); openAssetsModal('${slotId}', 'signature', '${esc(label)}')"
+                 title="Нажмите, чтобы сменить подпись">
+                <div class="ep-overlay-box"
+                     style="position: relative; width: ${wPx}px; height: ${hPx}px; transform: translate(${dx}px, ${dy}px);"
+                     onclick="event.stopPropagation(); this.classList.toggle('active');"
+                     onmousedown="startOverlayDrag(event, '${slotId}')">
+                    <img src="${asset.data}" alt="${esc(asset.name)}">
+                    <div class="ep-overlay-controls no-print" onclick="event.stopPropagation();">
+                        <button type="button" title="Уменьшить" onclick="adjustPlacement('${slotId}', -0.1, 0, 0)">−</button>
+                        <button type="button" title="Увеличить" onclick="adjustPlacement('${slotId}', 0.1, 0, 0)">+</button>
+                        <button type="button" title="Сбросить позицию" onclick="resetPlacement('${slotId}')">↺</button>
+                        <button type="button" title="Убрать подпись" onclick="removePlacement('${slotId}')">✕</button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function startOverlayDrag(e, slotId) {
+            if (e.button !== 0 || e.target.closest('.ep-overlay-controls')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const p = diaryState.placements[slotId];
+            if (!p) return;
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const origDx = p.dx || 0;
+            const origDy = p.dy || 0;
+
+            function onMove(ev) {
+                p.dx = Math.round(origDx + (ev.clientX - startX));
+                p.dy = Math.round(origDy + (ev.clientY - startY));
+                renderWorkspace();
+            }
+            function onUp() {
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onUp);
+                saveState();
+            }
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+        }
+
+        function adjustPlacement(slotId, dScale, dDx, dDy) {
+            const p = diaryState.placements[slotId];
+            if (!p) return;
+            p.scale = Math.min(2.5, Math.max(0.4, Number(((p.scale || 1) + dScale).toFixed(2))));
+            p.dx = (p.dx || 0) + dDx;
+            p.dy = (p.dy || 0) + dDy;
+            saveState();
+            renderWorkspace();
+        }
+
+        function resetPlacement(slotId) {
+            const p = diaryState.placements[slotId];
+            if (!p) return;
+            p.scale = 1;
+            p.dx = 0;
+            p.dy = 0;
+            saveState();
+            renderWorkspace();
+        }
+
+        function removePlacement(slotId) {
+            if (!diaryState.placements || !diaryState.placements[slotId]) return;
+            delete diaryState.placements[slotId];
+            saveState();
+            renderWorkspace();
+        }
+
+        function openAssetsModal(slotId = null, kind = null, label = '') {
+            if (slotId) {
+                pendingAssetTarget = { slotId, kind, label: label || slotId };
+            }
+            buildAssetsModal();
+            document.getElementById('assets-modal').classList.remove('hidden');
+        }
+
+        function closeAssetsModal() {
+            document.getElementById('assets-modal').classList.add('hidden');
+        }
+
+        function clearAssetTarget() {
+            pendingAssetTarget = null;
+            buildAssetsModal();
+        }
+
+        function buildAssetsModal() {
+            const banner = document.getElementById('assets-target-banner');
+            const labelEl = document.getElementById('assets-target-label');
+            if (pendingAssetTarget) {
+                banner.classList.remove('hidden');
+                labelEl.textContent = pendingAssetTarget.label;
+            } else {
+                banner.classList.add('hidden');
+            }
+
+            const renderList = (kind, containerId, emptyText) => {
+                const el = document.getElementById(containerId);
+                const items = (diaryState.assetsLibrary || []).filter(a => a.kind === kind);
+                if (!items.length) {
+                    el.innerHTML = `<div class="col-span-full text-xs text-slate-400 italic py-2">${emptyText}</div>`;
+                    return;
+                }
+                el.innerHTML = items.map(item => `
+                    <div class="border border-slate-200 rounded-xl p-2 bg-slate-50 flex flex-col justify-between gap-2">
+                        <div class="h-16 flex items-center justify-center bg-white rounded-lg border border-slate-100 p-1">
+                            <img src="${item.data}" alt="${esc(item.name)}" class="max-h-full max-w-full object-contain">
+                        </div>
+                        <div class="text-[11px] font-medium text-slate-700 truncate" title="${esc(item.name)}">${esc(item.name)}</div>
+                        <div class="flex items-center justify-between gap-1">
+                            ${pendingAssetTarget
+                                ? `<button type="button" onclick="applyAssetToTarget('${item.id}')" class="flex-1 py-1 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold">Вставить</button>`
+                                : `<span class="text-[10px] text-slate-400">Выберите место в бланке</span>`}
+                            <button type="button" onclick="deleteLibraryAsset('${item.id}')" class="py-1 px-1.5 rounded-lg text-rose-600 hover:bg-rose-50 text-[11px]" title="Удалить из библиотеки">✕</button>
+                        </div>
+                    </div>`).join('');
+            };
+
+            renderList('stamp', 'stamps-library-list', 'Печати пока не загружены');
+            renderList('signature', 'signatures-library-list', 'Подписи пока не загружены');
+        }
+
+        function handleAssetUpload(event, kind) {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (file.size > 1.5 * 1024 * 1024) {
+                showToast('Файл больше 1,5 МБ — выберите изображение поменьше');
+                event.target.value = '';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+                const name = (file.name.replace(/\.[^.]+$/, '').trim() || (kind === 'stamp' ? 'Печать' : 'Подпись')).slice(0, 40);
+                const asset = {
+                    id: 'asset_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+                    kind,
+                    name,
+                    data: reader.result
+                };
+                diaryState.assetsLibrary = diaryState.assetsLibrary || [];
+                diaryState.assetsLibrary.push(asset);
+                saveState();
+                buildAssetsModal();
+                showToast(kind === 'stamp' ? `Печать «${name}» добавлена` : `Подпись «${name}» добавлена`);
+                event.target.value = '';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function applyAssetToTarget(assetId) {
+            if (!pendingAssetTarget) return;
+            diaryState.placements = diaryState.placements || {};
+            const prev = diaryState.placements[pendingAssetTarget.slotId];
+            diaryState.placements[pendingAssetTarget.slotId] = {
+                assetId,
+                scale: prev ? prev.scale : 1,
+                dx: prev ? prev.dx : 0,
+                dy: prev ? prev.dy : 0
+            };
+            saveState();
+            pendingAssetTarget = null;
+            closeAssetsModal();
+            renderWorkspace();
+            showToast('Изображение добавлено на страницу');
+        }
+
+        function deleteLibraryAsset(assetId) {
+            diaryState.assetsLibrary = (diaryState.assetsLibrary || []).filter(a => a.id !== assetId);
+            if (diaryState.placements) {
+                Object.keys(diaryState.placements).forEach(k => {
+                    if (diaryState.placements[k].assetId === assetId) delete diaryState.placements[k];
+                });
+            }
+            saveState();
+            buildAssetsModal();
+            renderWorkspace();
+        }
+
+        // ============================================================================
+        // ПЕЧАТЬ
+        // ============================================================================
+        function openPrintGuide() { document.getElementById('print-modal').classList.remove('hidden'); }
+        function closePrintGuide() { document.getElementById('print-modal').classList.add('hidden'); }
+
+        function confirmAndPrint() {
+            closePrintGuide();
+            if (currentMode !== 'booklet') setMode('booklet');
+            setTimeout(() => window.print(), 300);
+        }
+        function triggerBrowserPrint() {
+            if (currentMode !== 'booklet') setMode('booklet');
+            setTimeout(() => window.print(), 250);
+        }
+
+        let autoSwitchedForPrint = false;
+        window.addEventListener('beforeprint', () => {
+            if (currentMode !== 'booklet') {
+                autoSwitchedForPrint = true;
+                currentMode = 'booklet';
+                renderWorkspace();
+            }
+            autoResizeAll();
+        });
+        window.addEventListener('afterprint', () => {
+            if (autoSwitchedForPrint) {
+                autoSwitchedForPrint = false;
+                setMode('edit');
+            }
+        });
+
+        // ============================================================================
+        // УВЕДОМЛЕНИЯ И ИНИЦИАЛИЗАЦИЯ
+        // ============================================================================
+        let toastTimer = null;
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3200);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            applyFontSettings();
+            renderWorkspace();
+            registerAllCustomFonts();
+            if (document.fonts && document.fonts.ready) document.fonts.ready.then(autoResizeAll);
+        });
+    </script>
+</body>
+</html>
