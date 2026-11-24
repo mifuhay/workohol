@@ -444,6 +444,114 @@
             .booklet-mode-container .booklet-sheet { zoom: 0.68; }
         }
 
+        
+        /* ---------- Сворачиваемая верхняя панель и стрелки листания страниц ---------- */
+        .header-collapsed #header-collapsible-body {
+            display: none !important;
+        }
+        .page-nav-arrow {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 35;
+            width: 38px;
+            height: 54px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, 0.82);
+            color: #ffffff;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+            transition: background-color 0.15s, transform 0.15s, opacity 0.15s;
+        }
+        .page-nav-arrow:hover:not(:disabled) {
+            background: rgba(37, 99, 235, 0.92);
+            transform: translateY(-50%) scale(1.04);
+        }
+        .page-nav-arrow:disabled {
+            opacity: 0.28;
+            cursor: default;
+        }
+        .page-nav-arrow.prev-arrow { left: 8px; }
+        .page-nav-arrow.next-arrow { right: 8px; }
+
+        .overflow-below-table {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: calc(100% + 5px);
+            display: flex;
+            justify-content: center;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .mobile-page-stage {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .viewport-scaler.scroll-vertical {
+            flex-direction: column !important;
+            align-items: center !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            scroll-snap-type: none;
+        }
+        .viewport-scaler.scroll-horizontal {
+            flex-direction: row !important;
+            align-items: flex-start !important;
+            justify-content: flex-start !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            scroll-snap-type: x mandatory;
+            gap: 20px !important;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+            width: 100vw !important;
+            max-width: 100vw !important;
+        }
+        .viewport-scaler.scroll-horizontal .mobile-page-stage {
+            width: 100vw !important;
+            min-width: 100vw !important;
+            max-width: 100vw !important;
+            scroll-snap-align: start;
+            scroll-snap-stop: always;
+        }
+        .mobile-scale-outer {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        .mobile-scale-inner {
+            transform-origin: top center;
+        }
+
+        @media (max-width: 640px) {
+            .page-nav-arrow {
+                width: 34px;
+                height: 46px;
+                border-radius: 12px;
+                top: auto;
+                bottom: 18px;
+                transform: none;
+            }
+            .page-nav-arrow:hover:not(:disabled) {
+                transform: scale(1.04);
+            }
+            .page-nav-arrow.prev-arrow { left: 10px; }
+            .page-nav-arrow.next-arrow { right: 10px; }
+            .edit-mode-container .diary-page { zoom: 1; }
+            .booklet-mode-container .booklet-sheet { zoom: 1; }
+        }
+
         /* ============ ПЕЧАТЬ ============ */
         @media print {
             @page { size: A4 landscape; margin: 0 !important; }
@@ -456,7 +564,7 @@
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
-            .no-print { display: none !important; }
+            .no-print, .page-nav-arrow, .overflow-below-table { display: none !important; }
 
             .viewport-scaler {
                 padding: 0 !important;
@@ -571,26 +679,42 @@
 <body class="min-h-screen flex flex-col">
 
     <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
-    <header class="no-print sticky top-0 z-40 bg-slate-900 text-white shadow-lg border-b border-slate-700">
-        <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-                <div class="bg-blue-600 p-2 rounded-lg shadow-inner">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <header id="main-header" class="no-print sticky top-0 z-40 bg-slate-900 text-white shadow-lg border-b border-slate-700">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <div class="bg-blue-600 p-1.5 sm:p-2 rounded-lg shadow-inner flex-shrink-0">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
                     </svg>
                 </div>
-                <div>
-                    <div class="flex items-center gap-2">
-                        <h1 class="font-bold text-sm sm:text-base tracking-tight">Дневник практики ВК ЕАГИ</h1>
-                        <span id="save-status" class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <h1 class="font-bold text-xs sm:text-base tracking-tight truncate">Дневник практики ВК ЕАГИ</h1>
+                        <span id="save-status" class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                             Сохранено
                         </span>
                     </div>
-                    <p class="text-xs text-slate-400">Всего страниц: <strong id="total-pages-badge" class="text-white">40</strong> (формат A5 / брошюра A4)</p>
+                    <p class="text-[11px] text-slate-400">Всего страниц: <strong id="total-pages-badge" class="text-white">40</strong> · Стр. <strong id="current-page-indicator" class="text-blue-300">1</strong></p>
                 </div>
             </div>
 
+            <div class="flex items-center gap-1 flex-wrap justify-end">
+                <div class="inline-flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-600 text-[11px]" title="Режим прокрутки страниц">
+                    <button type="button" id="btn-scroll-vert" onclick="setScrollDirection('vertical')" class="px-2 py-1 rounded-md font-medium bg-blue-600 text-white transition">↕ Вверх-вниз</button>
+                    <button type="button" id="btn-scroll-horiz" onclick="setScrollDirection('horizontal')" class="px-2 py-1 rounded-md font-medium text-slate-300 hover:text-white transition">↔ Вправо-влево</button>
+                </div>
+                <button type="button" onclick="prevPage()" title="Предыдущая страница" class="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-bold">◀</button>
+                <button type="button" onclick="nextPage()" title="Следующая страница" class="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-bold">▶</button>
+                <button type="button" id="btn-toggle-header" onclick="toggleHeaderCollapse()" title="Свернуть или развернуть панель настроек" class="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-medium flex items-center gap-1 transition">
+                    <span id="toggle-header-icon">▲</span>
+                    <span id="toggle-header-label">Свернуть</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="header-collapsible-body" class="border-t border-slate-800/90">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2.5">
             <div class="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
                 <button id="btn-mode-edit" onclick="setMode('edit')" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all bg-blue-600 text-white shadow">
                     1. Заполнение
@@ -654,7 +778,12 @@
                 </button>
             </div>
         </div>
+        </div>
     </header>
+
+    <!-- БОКОВЫЕ СТРЕЛКИ ПЕРЕЛИСТЫВАНИЯ СТРАНИЦ -->
+    <button type="button" id="btn-prev-page" onclick="prevPage()" class="page-nav-arrow prev-arrow" title="Предыдущая страница">‹</button>
+    <button type="button" id="btn-next-page" onclick="nextPage()" class="page-nav-arrow next-arrow" title="Следующая страница">›</button>
 
     <!-- БАННЕР РЕЖИМА БРОШЮРЫ -->
     <div id="booklet-banner" class="no-print hidden bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-amber-900 text-xs sm:text-sm">
@@ -989,13 +1118,85 @@
         }
 
         // ============================================================================
-        // ТАБЛИЦА РАБОТ: ВЫСОТА ТЕКСТА, ПЕРЕПОЛНЕНИЕ, ДОБАВЛЕНИЕ/УДАЛЕНИЕ
+        // ТАБЛИЦА РАБОТ: ВЫСОТА ТЕКСТА, ЖЁСТКИЙ НИЖНИЙ ЛИМИТ И УВЕДОМЛЕНИЕ ПОД ТАБЛИЦЕЙ
         // ============================================================================
         let overflowTimer = null;
+        const lastValidEntryText = new WeakMap();
+
+        function measureEntriesUsedHeight(box) {
+            let used = 0;
+            box.querySelectorAll('.work-entry-row').forEach(r => { used += r.offsetHeight; });
+            return used;
+        }
+
+        function isTextAtBottomBorder(el, box) {
+            if (!el || !box) return false;
+            const boxRect = box.getBoundingClientRect();
+            const elRect = el.getBoundingClientRect();
+            // Проверяем реальный нижний край текущего поля и всей стопки строк относительно нижней границы .work-entries
+            const row = el.closest('.work-entry-row');
+            const rowRect = row ? row.getBoundingClientRect() : elRect;
+            const bottomReached = (elRect.bottom >= boxRect.bottom - 1.5) || (rowRect.bottom >= boxRect.bottom - 1.5);
+            return bottomReached;
+        }
+
+        function onWorkEntryInput(el, pageIdx, rowIdx, colKey) {
+            if (!el) return;
+            const prevVal = lastValidEntryText.get(el) ?? el.value;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+
+            const box = el.closest('.work-entries');
+            const wrap = el.closest('.table-wrap');
+            const warn = wrap ? wrap.querySelector('.overflow-warn') : null;
+
+            if (box) {
+                const boxRect = box.getBoundingClientRect();
+                const elRect = el.getBoundingClientRect();
+                const exceededBottom = (elRect.bottom > boxRect.bottom + 0.5) || (el.scrollHeight > box.clientHeight);
+                if (exceededBottom) {
+                    el.value = prevVal;
+                    el.style.height = 'auto';
+                    el.style.height = el.scrollHeight + 'px';
+                    updateWorkCell(pageIdx, rowIdx, colKey, prevVal);
+                    if (warn) warn.classList.remove('hidden');
+                    return;
+                }
+                const atBottom = isTextAtBottomBorder(el, box);
+                if (warn) warn.classList.toggle('hidden', !atBottom);
+            }
+
+            lastValidEntryText.set(el, el.value);
+            updateWorkCell(pageIdx, rowIdx, colKey, el.value);
+        }
+
+        function handleWorkKeyDown(e, el) {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            const box = el.closest('.work-entries');
+            const wrap = el.closest('.table-wrap');
+            const warn = wrap ? wrap.querySelector('.overflow-warn') : null;
+            if (!box) return;
+
+            const isPrintableOrEnter = (e.key === 'Enter') || (e.key && e.key.length === 1);
+            if (!isPrintableOrEnter) return;
+
+            if (isTextAtBottomBorder(el, box)) {
+                const lineH = parseFloat(getComputedStyle(el).lineHeight) || 15;
+                // Разрешаем дописать строку на текущей линии, пока текст не выходит за нижнюю границу
+                const boxRect = box.getBoundingClientRect();
+                const elRect = el.getBoundingClientRect();
+                if (elRect.bottom + lineH > boxRect.bottom + 1) {
+                    e.preventDefault();
+                    if (warn) warn.classList.remove('hidden');
+                }
+            }
+        }
+
         function autoResizeEntry(el) {
             if (!el) return;
             el.style.height = 'auto';
             el.style.height = el.scrollHeight + 'px';
+            lastValidEntryText.set(el, el.value);
             clearTimeout(overflowTimer);
             overflowTimer = setTimeout(checkTableOverflow, 60);
         }
@@ -1004,17 +1205,143 @@
             document.querySelectorAll('textarea.work-entry-input').forEach(el => {
                 el.style.height = 'auto';
                 el.style.height = el.scrollHeight + 'px';
+                lastValidEntryText.set(el, el.value);
             });
             checkTableOverflow();
+            applyMobileFullPageScaling();
         }
 
         function checkTableOverflow() {
-            document.querySelectorAll('.work-entries').forEach(box => {
-                const warn = box.parentElement.querySelector('.overflow-warn');
-                if (!warn) return;
-                let used = 0;
-                box.querySelectorAll('.work-entry-row').forEach(r => { used += r.offsetHeight; });
-                warn.classList.toggle('hidden', used <= box.clientHeight + 1);
+            document.querySelectorAll('.table-wrap').forEach(wrap => {
+                const box = wrap.querySelector('.work-entries');
+                const warn = wrap.querySelector('.overflow-warn');
+                if (!box || !warn) return;
+                const boxRect = box.getBoundingClientRect();
+                let anyAtBottom = false;
+                box.querySelectorAll('.work-entry-input').forEach(inp => {
+                    if (inp.getBoundingClientRect().bottom >= boxRect.bottom - 1.5) anyAtBottom = true;
+                });
+                warn.classList.toggle('hidden', !anyAtBottom);
+            });
+        }
+
+        // ============================================================================
+        // СВОРАЧИВАНИЕ ПАНЕЛИ, РЕЖИМ ПРОКРУТКИ, ФИКСАЦИЯ И ЛИСТАНИЕ СТРАНИЦ
+        // ============================================================================
+        const SCROLL_PREF_KEY = 'eagi_practice_diary_scroll_v1';
+        function loadScrollPref() {
+            try {
+                const raw = JSON.parse(localStorage.getItem(SCROLL_PREF_KEY) || '{}');
+                return { dir: raw.dir === 'horizontal' ? 'horizontal' : 'vertical' };
+            } catch (e) {
+                return { dir: 'vertical' };
+            }
+        }
+        let scrollPref = loadScrollPref();
+        let headerCollapsed = false;
+        let activePageNum = 1;
+
+        function saveScrollPref() {
+            try { localStorage.setItem(SCROLL_PREF_KEY, JSON.stringify(scrollPref)); } catch (e) {}
+        }
+
+        function applyScrollModeUI() {
+            const ws = document.getElementById('workspace');
+            const vBtn = document.getElementById('btn-scroll-vert');
+            const hBtn = document.getElementById('btn-scroll-horiz');
+            const isHoriz = scrollPref.dir === 'horizontal';
+
+            if (ws) {
+                ws.classList.toggle('scroll-horizontal', isHoriz);
+                ws.classList.toggle('scroll-vertical', !isHoriz);
+            }
+            if (vBtn) {
+                vBtn.className = !isHoriz
+                    ? 'px-2 py-1 rounded-md font-medium bg-blue-600 text-white transition'
+                    : 'px-2 py-1 rounded-md font-medium text-slate-300 hover:text-white transition';
+            }
+            if (hBtn) {
+                hBtn.className = isHoriz
+                    ? 'px-2 py-1 rounded-md font-medium bg-blue-600 text-white transition'
+                    : 'px-2 py-1 rounded-md font-medium text-slate-300 hover:text-white transition';
+            }
+        }
+
+        function setScrollDirection(dir) {
+            if (dir !== 'horizontal' && dir !== 'vertical') return;
+            scrollPref.dir = dir;
+            saveScrollPref();
+            applyScrollModeUI();
+            setTimeout(() => {
+                applyMobileFullPageScaling();
+                goToPageNumber(activePageNum);
+            }, 40);
+            showToast(dir === 'horizontal' ? 'Включена прокрутка вправо-влево' : 'Включена прокрутка вверх-вниз');
+        }
+
+        function toggleHeaderCollapse() {
+            headerCollapsed = !headerCollapsed;
+            const header = document.getElementById('main-header');
+            const icon = document.getElementById('toggle-header-icon');
+            const label = document.getElementById('toggle-header-label');
+            if (header) header.classList.toggle('header-collapsed', headerCollapsed);
+            if (icon) icon.textContent = headerCollapsed ? '▼' : '▲';
+            if (label) label.textContent = headerCollapsed ? 'Меню' : 'Свернуть';
+            setTimeout(applyMobileFullPageScaling, 40);
+        }
+
+        function updatePageNavUI() {
+            const total = getTotalLogicalPages();
+            const indicator = document.getElementById('current-page-indicator');
+            if (indicator) indicator.textContent = `${activePageNum} / ${total}`;
+            const prevBtn = document.getElementById('btn-prev-page');
+            const nextBtn = document.getElementById('btn-next-page');
+            if (prevBtn) prevBtn.disabled = activePageNum <= 1;
+            if (nextBtn) nextBtn.disabled = activePageNum >= total;
+        }
+
+        function goToPageNumber(num) {
+            const total = getTotalLogicalPages();
+            const targetNum = Math.min(total, Math.max(1, Number(num) || 1));
+            activePageNum = targetNum;
+            updatePageNavUI();
+            if (currentMode !== 'edit') setMode('edit');
+            setTimeout(() => {
+                const el = document.querySelector(`.diary-page[data-page-num="${targetNum}"]`);
+                if (el) {
+                    const container = el.closest('.mobile-page-stage') || el;
+                    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                applyMobileFullPageScaling();
+            }, 60);
+        }
+
+        function prevPage() {
+            goToPageNumber(activePageNum - 1);
+        }
+
+        function nextPage() {
+            goToPageNumber(activePageNum + 1);
+        }
+
+        function applyMobileFullPageScaling() {
+            const isMobile = window.innerWidth <= 640;
+            document.querySelectorAll('.mobile-scale-outer').forEach(outer => {
+                const inner = outer.querySelector('.mobile-scale-inner');
+                if (!inner) return;
+                const baseW = inner.offsetWidth || 561;
+                const baseH = inner.offsetHeight || 793;
+                if (!isMobile) {
+                    inner.style.transform = '';
+                    outer.style.width = '';
+                    outer.style.height = '';
+                    return;
+                }
+                const availW = Math.max(240, (outer.parentElement ? outer.parentElement.clientWidth : window.innerWidth) - 16);
+                const scale = Math.min(1, availW / baseW);
+                inner.style.transform = `scale(${scale})`;
+                outer.style.width = Math.round(baseW * scale) + 'px';
+                outer.style.height = Math.round(baseH * scale) + 18 + 'px';
             });
         }
 
@@ -1357,7 +1684,11 @@
             const rows = entries.map((entry, r) => {
                 const ph = (txt) => (r === 0 ? txt : '');
                 const area = (col, cls, placeholder) =>
-                    `<textarea class="work-entry-input ${cls}" rows="1" oninput="updateWorkCell(${workPageIdx}, ${r}, '${col}', this.value); autoResizeEntry(this)" placeholder="${placeholder}">${esc(entry[col])}</textarea>`;
+                    `<textarea class="work-entry-input ${cls}" rows="1"
+                        data-page-idx="${workPageIdx}" data-row-idx="${r}" data-col-key="${col}"
+                        onkeydown="handleWorkKeyDown(event, this)"
+                        oninput="onWorkEntryInput(this, ${workPageIdx}, ${r}, '${col}')"
+                        placeholder="${placeholder}">${esc(entry[col])}</textarea>`;
                 return `
                 <div class="work-entry-row group">
                     <div class="work-entry-cell justify-center" style="width: 7%;">${area('num', 'text-center', ph('1'))}</div>
@@ -1410,13 +1741,15 @@
                                     </div>
                                     <div class="work-entries">${rows}</div>
                                     <div class="add-entry-bar no-print">
-                                        <span class="overflow-warn hidden mr-2 px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-300 text-[10px] font-sans font-medium">Текст не помещается — сократите или перенесите на новую страницу</span>
                                         <button type="button" onclick="addWorkEntry(${workPageIdx})" class="px-2.5 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-sans font-medium transition">+ Добавить запись / день</button>
                                     </div>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                    <div class="overflow-below-table no-print">
+                        <span class="overflow-warn hidden px-3 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10.5px] font-sans font-medium shadow-sm">Лимит страницы достигнут — дальше писать нельзя, перенесите на новую страницу</span>
+                    </div>
                 </div>
                 <div class="text-center text-[8.5pt] text-gray-600 mt-1">— ${pageNum} —</div>
             </div>`;
@@ -1566,10 +1899,16 @@
 
                 const { list } = buildPageList(false);
                 workspace.innerHTML = list.map((item, i) => `
-                    <div class="flex flex-col items-center">
+                    <div class="mobile-page-stage flex flex-col items-center">
                         <div class="no-print text-xs font-medium text-slate-500 mb-1.5">Страница ${i + 1} из ${list.length}</div>
-                        ${renderPage(item, i + 1)}
+                        <div class="mobile-scale-outer">
+                            <div class="mobile-scale-inner">
+                                ${renderPage(item, i + 1)}
+                            </div>
+                        </div>
                     </div>`).join('');
+                updatePageNavUI();
+                applyScrollModeUI();
             } else {
                 workspace.className = 'viewport-scaler booklet-mode-container pt-6 px-2 sm:px-6 flex-1';
                 document.getElementById('quick-nav-bar').classList.add('hidden');
@@ -1617,14 +1956,10 @@
         }
 
         function scrollToPage(target) {
-            if (currentMode !== 'edit') setMode('edit');
-            setTimeout(() => {
-                let el = null;
-                if (target === 'penultimate') el = document.getElementById('page-penultimate');
-                else if (target === 'last') el = document.getElementById('page-last');
-                else el = document.querySelector(`.diary-page[data-page-num="${target}"]`);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 50);
+            const total = getTotalLogicalPages();
+            if (target === 'penultimate') goToPageNumber(total - 1);
+            else if (target === 'last') goToPageNumber(total);
+            else goToPageNumber(target);
         }
 
         // ============================================================================
@@ -2147,9 +2482,50 @@
             toastTimer = setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3200);
         }
 
+        window.addEventListener('wheel', (e) => {
+            if (currentMode !== 'edit') return;
+            const ws = document.getElementById('workspace');
+            if (!ws) return;
+            if (scrollPref.dir === 'horizontal') {
+                // В режиме вправо-влево вертикальное колёсико переводит прокрутку в горизонтальную
+                if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                    ws.scrollLeft += e.deltaY;
+                    e.preventDefault();
+                }
+            } else {
+                // В режиме вверх-вниз горизонтальный сдвиг колёсика не листает страницы по горизонтали
+                if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+                    e.preventDefault();
+                }
+            }
+        }, { passive: false });
+
+        window.addEventListener('resize', applyMobileFullPageScaling);
+        window.addEventListener('scroll', () => {
+            if (currentMode !== 'edit') return;
+            const pages = Array.from(document.querySelectorAll('.diary-page[data-page-num]'));
+            if (!pages.length) return;
+            const midY = window.innerHeight * 0.35;
+            let best = pages[0];
+            let bestDist = Math.abs(best.getBoundingClientRect().top - midY);
+            for (const p of pages) {
+                const dist = Math.abs(p.getBoundingClientRect().top - midY);
+                if (dist < bestDist) {
+                    best = p;
+                    bestDist = dist;
+                }
+            }
+            const num = Number(best.dataset.pageNum);
+            if (num && num !== activePageNum) {
+                activePageNum = num;
+                updatePageNavUI();
+            }
+        }, { passive: true });
+
         window.addEventListener('DOMContentLoaded', () => {
             applyFontSettings();
             renderWorkspace();
+            updatePageNavUI();
             registerAllCustomFonts();
             if (document.fonts && document.fonts.ready) document.fonts.ready.then(autoResizeAll);
         });
